@@ -1,0 +1,38 @@
+# Identificar con wlr-randr, usar Make+Model+Serial como output
+
+profile triple {
+		output "Lenovo Group Limited LEN T24d-10 V5GR3353" mode 1920x1080 position 0,0
+		output "AU Optronics 0x226D Unknown" mode 1920x1080 position 1920,0
+		output "Acer Technologies Acer X203W LAN080034211" mode 1680x1050 position 3840,0
+}
+
+profile two-plus-hdmi2usb {
+		output "HJW HDMI TO USB 0x01348D1D" mode 1920x1080 position 0,0
+		output "AU Optronics 0x226D Unknown" mode 1920x1080 position 1920,0
+		output "Acer Technologies Acer X203W LAN080034211" mode 1680x1050 position 3840,0
+}
+
+profile doble-lenovo {
+		output "Lenovo Group Limited LEN T24d-10 V5GR3353" mode 1920x1080 position 0,0
+		output "AU Optronics 0x226D Unknown" mode 1920x1080 position 1920,0
+}
+
+
+profile doble-acer {
+		output "AU Optronics 0x226D Unknown" mode 1920x1080 position 0,0
+		output "Acer Technologies Acer X203W LAN080034211" mode 1680x1050 position 1920,0
+}
+ 
+
+profile laptop-only {
+		output "AU Optronics 0x226D Unknown" mode 1920x1080 position 0,0
+}
+
+profile single-lenovo {
+		output "Lenovo Group Limited LEN T24d-10 V5GR3353" mode 1920x1080 position 0,0
+}
+
+profile single-acer {
+		output "Acer Technologies Acer X203W LAN080034211" mode 1680x1050 position 0,0
+}
+ 

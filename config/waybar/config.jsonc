@@ -1,0 +1,64 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 24,
+  "spacing": 4,
+
+  "modules-left": [
+    "custom/launcher",
+    "river/window"
+  ],
+
+  "modules-center": [
+    "river/tags"
+  ],
+
+  "modules-right": [
+    "pulseaudio",
+    "clock",
+    "tray",
+    "custom/power"
+  ],
+
+  "river/tags": {
+    "num-tags": 6,
+    "tag-labels": ["", "", "", "", "", ""]
+  },
+
+  "river/window": {
+    "format": "{}",
+    "max-length": 50
+  },
+
+  "tray": {
+    "spacing": 8
+  },
+
+  "clock": {
+    "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
+    "format-alt": "{:%Y-%m-%d}"
+  },
+
+  "pulseaudio": {
+    "format": "{volume}% {icon}",
+    "format-bluetooth": "{volume}% {icon}",
+    "format-muted": "",
+    "format-icons": {
+      "default": ["", "", ""]
+    },
+    "on-click": "pavucontrol"
+  },
+
+  "custom/launcher": {
+    "format": " ",
+    "on-click": "fuzzel",
+    "on-click-right": "killall fuzzel"
+  },
+
+  "custom/power": {
+    "format": " ⏻ ",
+    "tooltip": false,
+    "on-click": "sh $HOME/.config/fuzzel/exit-menu.sh"
+  }
+}
+
