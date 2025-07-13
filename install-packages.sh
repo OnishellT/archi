@@ -27,9 +27,8 @@ official_packages=(
   ufw grim slurp wl-clipboard swappy htop lsd firefox file-roller
   gvfs imv mousepad curlie yazi ffmpeg p7zip jq poppler fd
   ripgrep fzf zoxide imagemagick
-  # DWM session fallback
-  xorg-server xorg-xinit xterm xset xwallpaper
-  dwm dmenu st slstatus
+  # ChadWM dependencies
+  xorg-server xorg-xinit xterm xset xwallpaper picom feh acpi rofi
 )
 pacman -S --needed --noconfirm "${official_packages[@]}"
 
@@ -64,6 +63,16 @@ export PATH="$user_home/.cargo/bin:$PATH"
 if ! command -v pfetch &> /dev/null; then
   sudo -u "$normal_user" cargo install pfetch
 fi
+
+# ─── Icon & GTK Theme Configuration ──────────────────────────────
+mkdir -p "$user_home/.config/gtk-3.0"
+cat > "$user_home/.config/gtk-3.0/settings.ini" << EOF
+[Settings]
+gtk-theme-name=Catppuccin-Mocha
+gtk-icon-theme-name=Papirus-Dark
+gtk-font-name=JetBrainsMono Nerd Font 10
+EOF
+chown -R "$normal_user:$normal_user" "$user_home/.config/gtk-3.0"
 
 # ─── Icon theme installer ─────────────────────────────────────────
 if ! command -v papirus-icon-theme &> /dev/null; then
@@ -105,27 +114,24 @@ Type=Application
 DesktopNames=river
 EOF
 
-# ─── Setup DWM .xinitrc ──────────────────────────────────────────
-cat > "$user_home/.xinitrc" << 'EOF'
-#!/bin/sh
-xsetroot -cursor_name left_ptr
-xset r rate 300 50 &
-xwallpaper --zoom ~/.config/river/wallpapers/river-wp2.jpg &
-slstatus &
-exec dwm
-EOF
-chown "$normal_user:$normal_user" "$user_home/.xinitrc"
-chmod +x "$user_home/.xinitrc"
+# ─── Install & setup ChadWM ──────────────────────────────────────
+sudo -u "$normal_user" git clone https://github.com/siduck/chadwm --depth 1 "$user_home/.config/chadwm"
+cd "$user_home/.config/chadwm"
+sudo -u "$normal_user" mv eww "$user_home/.config"
+cd chadwm
+sudo -u "$normal_user" chmod +x ../scripts/*.sh
+make clean install
 
-# ─── Register DWM in Ly sessions ────────────────────────────────
-mkdir -p /etc/X11/Sessions
-cat > /etc/X11/Sessions/dwm.desktop <<EOF
+# ─── Register ChadWM in Display Manager ──────────────────────────
+mkdir -p /usr/share/xsessions
+cat > /usr/share/xsessions/chadwm.desktop <<EOF
 [Desktop Entry]
-Name=DWM
-Comment=Minimal X11 session with dwm
-Exec=/bin/bash -lc startx
+Name=chadwm
+Comment=dwm made beautiful
+Exec=$user_home/.config/chadwm/scripts/run.sh
 Type=Application
 EOF
+chown -R "$normal_user:$normal_user" "$user_home/.config/chadwm"
 
 # ─── Final message ───────────────────────────────────────────────
 cat << EOF
@@ -134,7 +140,7 @@ cat << EOF
 
 • You can now log into either:
   ✔ River (Wayland)
-  ✔ DWM (X11 fallback)
+  ✔ ChadWM (X11 dwm fork)
 
 • Log out and back in (or restart shell):
     sudo -u $normal_user fish
