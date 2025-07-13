@@ -17,7 +17,7 @@ pacman -Syu --needed --noconfirm base-devel sudo git fish bash-completion
 
 # ─── Official repo packages ─────────────────────────
 official_packages=(
-  micro vim neovim mpv bat wayland xorg-xwayland
+  micro vim neovim tldr mpv bat wayland xorg-xwayland
   xdg-utils xdg-user-dirs xdg-desktop-portal-wlr
   networkmanager network-manager-applet bluez-utils blueman
   git wget river ly foot polkit-gnome waybar wlr-randr kanshi
