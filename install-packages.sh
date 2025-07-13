@@ -17,18 +17,19 @@ pacman -Syu --needed --noconfirm base-devel sudo git fish bash-completion
 
 # ─── Official repo packages ──────────────────────────────────────
 official_packages=(
-  micro vim neovim tldr mpv zeal bat wayland xorg-xwayland
+  micro vim neovim tldr mpv bat wayland xorg-xwayland
   xdg-utils xdg-user-dirs xdg-desktop-portal-wlr
   networkmanager network-manager-applet bluez-utils blueman
   git wget river ly foot polkit-gnome waybar wlr-randr kanshi
-  fuzzel swaybg swayidle swaync udiskie
+  fuzzel swaybg swayidle mako
   otf-font-awesome adobe-source-sans-fonts ttf-sourcecodepro-nerd
   ttf-jetbrains-mono ttf-jetbrains-mono-nerd pavucontrol pamixer
   ufw grim slurp wl-clipboard swappy htop lsd firefox file-roller
   gvfs imv mousepad curlie yazi ffmpeg p7zip jq poppler fd
   ripgrep fzf zoxide imagemagick
-  # ChadWM dependencies
-  xorg-server xorg-xinit xterm xset xwallpaper picom feh acpi rofi
+  xorg-server xorg-xinit xterm xorg-xset xwallpaper picom feh acpi rofi
+  xclip
+  udisks2
 )
 pacman -S --needed --noconfirm "${official_packages[@]}"
 
@@ -41,6 +42,33 @@ systemctl enable --now ufw
 ufw default deny incoming
 ufw default allow outgoing
 ufw --force enable
+
+# ─── Polkit rule for udisks2 auto-mount permissions ──────────────
+cat > /etc/polkit-1/localauthority/50-local.d/50-udisks2.pkla <<EOF
+[Allow udisks2 mounting for users]
+Identity=unix-group:plugdev;unix-group:lpadmin;unix-user:*
+Action=org.freedesktop.udisks2.filesystem-mount*;org.freedesktop.udisks2.drive-eject
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
+EOF
+
+# ─── UDisks2 config with automount enabled ───────────────────────
+mkdir -p /etc/udisks2
+cat > /etc/udisks2/udisks2.conf <<EOF
+[defaults]
+defaults=noexec,noatime,nodiratime
+mount_options=noexec,noatime,nodiratime
+automount=true
+automount-interval=10
+EOF
+
+# ─── Create user mount directory ─────────────────────────────────
+sudo -u "$normal_user" mkdir -p "$user_home/Media"
+
+# ─── Restart udisks2 and polkit services to apply changes ────────
+systemctl restart udisks2
+systemctl restart polkit
 
 # ─── AUR helper & packages ───────────────────────────────────────
 paru_packages=(
@@ -63,16 +91,6 @@ export PATH="$user_home/.cargo/bin:$PATH"
 if ! command -v pfetch &> /dev/null; then
   sudo -u "$normal_user" cargo install pfetch
 fi
-
-# ─── Icon & GTK Theme Configuration ──────────────────────────────
-mkdir -p "$user_home/.config/gtk-3.0"
-cat > "$user_home/.config/gtk-3.0/settings.ini" << EOF
-[Settings]
-gtk-theme-name=Catppuccin-Mocha
-gtk-icon-theme-name=Papirus-Dark
-gtk-font-name=JetBrainsMono Nerd Font 10
-EOF
-chown -R "$normal_user:$normal_user" "$user_home/.config/gtk-3.0"
 
 # ─── Icon theme installer ─────────────────────────────────────────
 if ! command -v papirus-icon-theme &> /dev/null; then
@@ -115,6 +133,7 @@ DesktopNames=river
 EOF
 
 # ─── Install & setup ChadWM ──────────────────────────────────────
+rm -rf "$user_home/.config/chadwm"
 sudo -u "$normal_user" git clone https://github.com/siduck/chadwm --depth 1 "$user_home/.config/chadwm"
 cd "$user_home/.config/chadwm"
 sudo -u "$normal_user" mv eww "$user_home/.config"
@@ -132,6 +151,13 @@ Exec=$user_home/.config/chadwm/scripts/run.sh
 Type=Application
 EOF
 chown -R "$normal_user:$normal_user" "$user_home/.config/chadwm"
+
+# ─── Clipboard and wallpaper setup for ChadWM ────────────────────
+# Start xclip in background for clipboard management
+sudo -u "$normal_user" bash -c "pgrep xclip || xclip -selection clipboard -o >/dev/null &"
+
+# Set wallpaper using xwallpaper (you can change path below)
+sudo -u "$normal_user" xwallpaper --zoom "$user_home/.config/river/wallpapers/forest.png" &
 
 # ─── Final message ───────────────────────────────────────────────
 cat << EOF
@@ -151,6 +177,7 @@ cat << EOF
 • Adjust firewall rules:
     ufw allow <port>
     ufw status
+
 EOF
 
 exit 0

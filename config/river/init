@@ -112,12 +112,11 @@ pkill -SIGTERM swayidle
 # Launch core services and utilities
 riverctl spawn "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &" # Auth agent
 riverctl spawn "waybar &"                         # Top bar
-riverctl spawn "swaync &"                          # Notification daemon
+riverctl spawn "mako &"                        # Notification daemon
 riverctl spawn "kanshi &"                          # Monitor hotplug rules
-riverctl spawn "udiskie -A -t &"                   # Auto mount disks
 riverctl spawn "nm-applet --indicator &"           # Network manager tray
 riverctl spawn "blueman-applet &"                  # Bluetooth tray
-riverctl spawn "swaybg -m fill -i $HOME/.config/river/wallpapers/river-wp2.jpg &" # Set wallpaper
+riverctl spawn "swaybg -m fill -i $HOME/.config/river/wallpapers/forest.png &" # Set wallpaper
 riverctl spawn "swayidle -w timeout 300 'gtklock --style $HOME/.config/gtklock/themes/catppuccin-mocha/theme.css --daemonize' before-sleep 'gtklock --style $HOME/.config/gtklock/themes/catppuccin-mocha/theme.css --daemonize' &" # Auto lock after idle
 
 # --- Layout ---------------------------------------------
