@@ -1,30 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ─── Root check ──────────────────────────────────────────────────
+# ─── Root check ─────────────────────────────────────────────────
 if (( EUID != 0 )); then
   echo "This script must be run as root. Use sudo!" >&2
   exit 1
 fi
 
-# ─── Identify user & paths ───────────────────────────────────────
+# ─── Identify user & paths ─────────────────────────────
 normal_user=$(logname)
 user_home=$(eval echo "~$normal_user")
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-# ─── Full system update & base tools ─────────────────────────────
+# ─── Full system update & base tools ─────────────────────────
 pacman -Syu --needed --noconfirm base-devel sudo git fish bash-completion
 
-# ─── Official repo packages ──────────────────────────────────────
+# ─── Official repo packages ─────────────────────────
 official_packages=(
-  micro vim neovim tldr mpv bat wayland xorg-xwayland
+  micro vim neovim mpv bat wayland xorg-xwayland
   xdg-utils xdg-user-dirs xdg-desktop-portal-wlr
   networkmanager network-manager-applet bluez-utils blueman
   git wget river ly foot polkit-gnome waybar wlr-randr kanshi
   fuzzel swaybg swayidle mako
   otf-font-awesome adobe-source-sans-fonts ttf-sourcecodepro-nerd
   ttf-jetbrains-mono ttf-jetbrains-mono-nerd pavucontrol pamixer
-  ufw grim slurp wl-clipboard swappy htop lsd firefox file-roller
+  ufw grim slurp wl-clipboard swappy htop lsd file-roller
   gvfs imv mousepad curlie yazi ffmpeg p7zip jq poppler fd
   ripgrep fzf zoxide imagemagick
   xorg-server xorg-xinit xterm xorg-xset xwallpaper picom feh acpi rofi
@@ -33,17 +33,18 @@ official_packages=(
 )
 pacman -S --needed --noconfirm "${official_packages[@]}"
 
-# ─── Enable & start essential services ───────────────────────────
+# ─── Enable & start essential services ────────────────────
 systemctl enable --now NetworkManager
 systemctl enable --now bluetooth
 systemctl enable --now ufw
 
-# ─── Configure UFW ───────────────────────────────────────────────
+# ─── Configure UFW ───────────────────────────
 ufw default deny incoming
 ufw default allow outgoing
 ufw --force enable
 
-# ─── Polkit rule for udisks2 auto-mount permissions ──────────────
+# ─── Polkit rule for udisks2 auto-mount permissions ───────────
+mkdir -p /etc/polkit-1/localauthority/50-local.d/
 cat > /etc/polkit-1/localauthority/50-local.d/50-udisks2.pkla <<EOF
 [Allow udisks2 mounting for users]
 Identity=unix-group:plugdev;unix-group:lpadmin;unix-user:*
@@ -53,7 +54,7 @@ ResultInactive=yes
 ResultActive=yes
 EOF
 
-# ─── UDisks2 config with automount enabled ───────────────────────
+# ─── UDisks2 config with automount enabled ─────────────
 mkdir -p /etc/udisks2
 cat > /etc/udisks2/udisks2.conf <<EOF
 [defaults]
@@ -63,17 +64,18 @@ automount=true
 automount-interval=10
 EOF
 
-# ─── Create user mount directory ─────────────────────────────────
+# ─── Create user mount directory ────────────────────────
 sudo -u "$normal_user" mkdir -p "$user_home/Media"
 
-# ─── Restart udisks2 and polkit services to apply changes ────────
+# ─── Restart udisks2 and polkit services ───────────────
 systemctl restart udisks2
 systemctl restart polkit
 
-# ─── AUR helper & packages ───────────────────────────────────────
+# ─── AUR helper & packages ─────────────────────────
 paru_packages=(
   resvg
   catppuccin-gtk-theme-mocha
+  thorium-browser-avx2-bin
 )
 if command -v paru &> /dev/null; then
   sudo -u "$normal_user" paru -Syu --needed --noconfirm "${paru_packages[@]}"
@@ -81,7 +83,7 @@ else
   echo "⚠️ paru not found; skipping AUR packages." >&2
 fi
 
-# ─── Rust & pfetch (optional) ────────────────────────────────────
+# ─── Rust & pfetch (optional) ───────────────────────
 if ! command -v rustup &> /dev/null; then
   sudo -u "$normal_user" curlie -sSf https://sh.rustup.rs \
     | sudo -u "$normal_user" sh -s -- -y
@@ -92,12 +94,12 @@ if ! command -v pfetch &> /dev/null; then
   sudo -u "$normal_user" cargo install pfetch
 fi
 
-# ─── Icon theme installer ─────────────────────────────────────────
+# ─── Icon theme installer ─────────────────────────
 if ! command -v papirus-icon-theme &> /dev/null; then
   sudo -u "$normal_user" wget -qO- https://git.io/papirus-icon-theme-install | sh
 fi
 
-# ─── Sync local configs into ~/.config ───────────────────────────
+# ─── Sync local configs into ~/.config ───────────────
 if [[ -d "$script_dir/config" ]]; then
   echo "Syncing $script_dir/config → $user_home/.config/"
   rsync -a --delete --chown="$normal_user":"$normal_user" \
@@ -106,7 +108,34 @@ else
   echo "No config/ folder found next to script; skipping."
 fi
 
-# ─── Setup River start script ────────────────────────────────────
+# ─── Set up terminal-based xdg-open handler for directories ─────
+xdg_open_script="$user_home/.local/bin/xdg-terminal-open"
+xdg_open_desktop="$user_home/.local/share/applications/xdg-terminal-open.desktop"
+
+sudo -u "$normal_user" mkdir -p "$(dirname "$xdg_open_script")" "$(dirname "$xdg_open_desktop")"
+
+sudo -u "$normal_user" tee "$xdg_open_script" > /dev/null <<'EOF'
+#!/bin/sh
+TERMINAL="${TERMINAL:-foot}"
+FM="${FILE_MANAGER:-yazi}"
+TARGET="$1"
+[ -f "$TARGET" ] && TARGET="$(dirname "$TARGET")"
+exec "$TERMINAL" -e "$FM" "$TARGET"
+EOF
+chmod +x "$xdg_open_script"
+
+sudo -u "$normal_user" tee "$xdg_open_desktop" > /dev/null <<EOF
+[Desktop Entry]
+Type=Application
+Name=Terminal File Manager
+Exec=$xdg_open_script %u
+MimeType=inode/directory;
+NoDisplay=true
+EOF
+
+sudo -u "$normal_user" xdg-mime default xdg-terminal-open.desktop inode/directory
+
+# ─── Setup River start script ─────────────────────────
 cat > /usr/local/bin/start-river << 'EOF'
 #!/bin/sh
 export XDG_SESSION_TYPE=wayland
@@ -121,7 +150,7 @@ exec river
 EOF
 chmod +x /usr/local/bin/start-river
 
-# ─── Register River in Wayland sessions ──────────────────────────
+# ─── Register River in Wayland sessions ──────────────
 mkdir -p /usr/share/wayland-sessions
 cat > /usr/share/wayland-sessions/river.desktop <<EOF
 [Desktop Entry]
@@ -132,7 +161,7 @@ Type=Application
 DesktopNames=river
 EOF
 
-# ─── Install & setup ChadWM ──────────────────────────────────────
+# ─── Install & setup ChadWM ────────────────────────
 rm -rf "$user_home/.config/chadwm"
 sudo -u "$normal_user" git clone https://github.com/siduck/chadwm --depth 1 "$user_home/.config/chadwm"
 cd "$user_home/.config/chadwm"
@@ -141,7 +170,7 @@ cd chadwm
 sudo -u "$normal_user" chmod +x ../scripts/*.sh
 make clean install
 
-# ─── Register ChadWM in Display Manager ──────────────────────────
+# ─── Register ChadWM in Display Manager ──────────────
 mkdir -p /usr/share/xsessions
 cat > /usr/share/xsessions/chadwm.desktop <<EOF
 [Desktop Entry]
@@ -152,14 +181,11 @@ Type=Application
 EOF
 chown -R "$normal_user:$normal_user" "$user_home/.config/chadwm"
 
-# ─── Clipboard and wallpaper setup for ChadWM ────────────────────
-# Start xclip in background for clipboard management
+# ─── Clipboard and wallpaper setup for ChadWM ────────────
 sudo -u "$normal_user" bash -c "pgrep xclip || xclip -selection clipboard -o >/dev/null &"
-
-# Set wallpaper using xwallpaper (you can change path below)
 sudo -u "$normal_user" xwallpaper --zoom "$user_home/.config/river/wallpapers/forest.png" &
 
-# ─── Final message ───────────────────────────────────────────────
+# ─── Final message ──────────────────────────────
 cat << EOF
 
 ✅ Arch setup complete!

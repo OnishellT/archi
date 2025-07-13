@@ -15,6 +15,7 @@
 
   "modules-right": [
     "pulseaudio",
+    "custom/bluetooth-menu",
     "clock",
     "tray",
     "custom/power"
@@ -31,7 +32,8 @@
   },
 
   "tray": {
-    "spacing": 8
+    "spacing": 8,
+    "blacklist": ["blueman-applet"]
   },
 
   "clock": {
@@ -59,6 +61,12 @@
     "format": " ⏻ ",
     "tooltip": false,
     "on-click": "sh $HOME/.config/fuzzel/exit-menu.sh"
+  },
+ 
+  "custom/bluetooth-menu": {
+    "format": "󰂯",
+    "tooltip": false,
+    "on-click": "blueman-manager"
   }
 }
 
