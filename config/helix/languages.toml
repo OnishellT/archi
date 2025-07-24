@@ -1,0 +1,71 @@
+# ========================
+# JavaScript & TypeScript
+# ========================
+[[language]]
+name = "javascript"
+language-servers = [
+  { name = "typescript-language-server", except-features = ["format"] },
+]
+formatter = { command = "biome", args = ["format", "--stdin-file-path", "%{buffer_name}"] }
+
+[[language]]
+name = "typescript"
+language-servers = [
+  { name = "typescript-language-server", except-features = ["format"] },
+]
+formatter = { command = "biome", args = ["format", "--stdin-file-path", "%{buffer_name}"] }
+
+[[language]]
+name = "tsx"
+language-servers = [
+  { name = "typescript-language-server", except-features = ["format"] },
+]
+formatter = { command = "biome", args = ["format", "--stdin-file-path", "%{buffer_name}"] }
+
+# ----
+# language-server definitions
+[language-server.typescript-language-server]
+command = "typescript-language-server"
+args = ["--stdio"]
+# You can optionally add formatting options via config per LSP spec
+
+# =========
+# Python
+# =========
+[[language]]
+name = "python"
+language-servers = [
+  "pyright",
+  "ruff"
+]
+formatter = { command = "ruff", args = ["format", "--stdin-filename", "%{buffer_name}"] }
+auto-format = true
+
+[language-server.pyright]
+command = "pyright-langserver"
+args = ["--stdio"]
+[language-server.pyright.config.python.analysis]
+typeCheckingMode = "basic"
+
+[language-server.ruff]
+command = "ruff"
+args = ["server"]
+# Ruff LSP auto-configures via pyproject.toml if present :contentReference[oaicite:1]{index=1}
+
+# ====
+# Go
+# ====
+[[language]]
+name = "go"
+auto-format = true
+formatter = { command = "goimports" }
+language-servers = ["gopls", "golangci-lint-lsp"]
+
+[language-server.gopls]
+command = "gopls"
+
+[language-server.golangci-lint-lsp]
+command = "golangci-lint-langserver"
+[language-server.golangci-lint-lsp.config]
+command = ["golangci-lint", "run", "--out-format", "json", "--issues-exit-code=1"]
+
