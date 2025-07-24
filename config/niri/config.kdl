@@ -93,12 +93,12 @@ window-rule {
 
 window-rule { 
     match app-id="thunar$" 
-    open-on-workspace "6" 
+    open-on-workspace "3" 
 }
 
 window-rule { 
     match app-id="steam$" 
-    open-on-workspace "7" 
+    open-on-workspace "4" 
 }
 
 // 6. Key bindings
@@ -129,6 +129,9 @@ binds {
     Mod+BracketRight     { consume-or-expel-window-right; }
     Mod+Comma            { consume-window-into-column; }
     Mod+Period           { expel-window-from-column; }
+    Mod+Ctrl+Shift+F { toggle-windowed-fullscreen; }
+    Mod+V       { toggle-window-floating; }
+    Mod+Shift+V { switch-focus-between-floating-and-tiling; }
 
     Mod+1 { focus-workspace 1; }
     Mod+2 { focus-workspace 2; }
@@ -154,6 +157,17 @@ binds {
     Mod+Shift+0 { move-column-to-workspace 10 focus=false; }
 
     Mod+Space    { spawn "sh" "-c" "qs ipc call globalIPC toggleLauncher"; }
+
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.05+"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.05-"; }
+    XF86AudioMute        allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86AudioMicMute     allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
+
+    XF86AudioNext { spawn "playerctl" "next"; }
+    XF86AudioPrev { spawn "playerctl" "previous"; }
+    XF86AudioPlay { spawn "playerctl" "play-pause"; }
+    XF86AudioPause { spawn "playerctl" "play-pause"; }
+
 }
 
 // 7. Autostart
