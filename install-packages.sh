@@ -57,7 +57,6 @@ official_packages=(
   qt6-5compat
   cava
   gpu-screen-recorder
-  swww
 )
 pacman -S --needed --noconfirm "${official_packages[@]}"
 
