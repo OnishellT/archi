@@ -21,7 +21,7 @@ BASE_PACKAGES=(
   networkmanager bluez-utils pipewire wireplumber
   xorg-server xorg-xinit xterm feh acpi xclip udisks2 thunar
   ufw polkit-gnome grim slurp wl-clipboard swappy wlr-randr
-  pulsemixer mako playerctl kanshi swaync fd
+  pulsemixer mako playerctl kanshi swaync fd noto-fonts-emoji
 )
 
 DWM_PACKAGES=(dwm dmenu picom xwallpaper)
@@ -29,6 +29,12 @@ DWM_PACKAGES=(dwm dmenu picom xwallpaper)
 RIVER_PACKAGES=(
   river
   bluetui
+  seatd
+  xdg-desktop-portal
+  xdg-desktop-portal-wlr
+  wayland-protocols
+  bluetui
+  xorg-xwayland
 )
 
 
@@ -71,7 +77,8 @@ setup_services() {
   systemctl enable --now bluetooth
   systemctl enable --now ufw
   systemctl enable --now ly
-
+  systemctl enable --now seatd
+  
   ufw default deny incoming
   ufw default allow outgoing
   ufw --force enable
@@ -113,6 +120,7 @@ x-scheme-handler/https=thorium-browser.desktop;
 EOF
 
   chown "$normal_user":"$normal_user" "$user_home/.config/mimeapps.list"
+
 }
 
 sync_configs() {
@@ -151,14 +159,14 @@ setup_river_session() {
   cat > /usr/local/bin/start-river << 'EOF'
 #!/bin/sh
 export TERMINAL=foot
-export BROWSER=thorium
+export BROWSER=thorium-browser-avx2
 export XDG_CURRENT_DESKTOP=river
 export GTK_USE_PORTAL=1
 export QT_QPA_PLATFORM=wayland
 export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
 
 river &
-swbar &
+yambar &
 wait
 EOF
   chmod +x /usr/local/bin/start-river
