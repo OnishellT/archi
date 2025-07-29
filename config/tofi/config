@@ -1,0 +1,23 @@
+# Catppuccin Mocha text & background
+text-color        = #cdd6f4
+prompt-color      = #f38ba8
+selection-color   = #f9e2af
+background-color  = #1e1e2e   
+
+# Performance tweaks
+font               = monospace
+hint-font          = false
+ascii-input        = true
+late-keyboard-init = true
+
+# Reduced “fullscreen” style (~50% of 2560×1440)
+width              = 840     
+height             = 360      
+border-width       = 0
+outline-width      = 0
+corner-radius      = 20
+
+# Results
+result-spacing     = 25
+num-results        = 10
+horizontal         = false

@@ -1,0 +1,184 @@
+# Catppuccin-Mocha Color Palette (RGBA format)
+colors:
+  base: &base "1e1e2eff"
+  mantle: &mantle "181825ff"
+  crust: &crust "11111bff"
+  text: &text "cdd6f4ff"
+  subtext0: &subtext0 "a6adc8ff"
+  overlay0: &overlay0 "6c7086ff"
+  blue: &blue "89b4faff"
+  lavender: &lavender "b4befeff"
+  red: &red "f38ba8ff"
+  peach: &peach "fab387ff"
+  yellow: &yellow "f9e2afff"
+  green: &green "a6e3a1ff"
+  mauve: &mauve "cba6f7ff"
+  transparent: &transparent "00000000"
+
+# Font Configuration
+fonts:
+  nerdfont: &nerdfont "Symbols Nerd Font Mono:pixelsize=14"
+  gomono: &gomono "JetBrainsMono Nerd Font Mono:pixelsize=14"
+
+# Decoration Presets
+bg_default: &bg_default {stack: [{background: {color: *transparent}}, {underline: {size: 3, color: *lavender}}]}
+
+bar:
+  font: *gomono
+  height: 20
+  location: top
+  right-spacing: 8
+  right-margin: 10
+  border:
+    top-margin: 5 
+    left-margin: 10
+    right-margin: 10
+    color: *overlay0
+  background: *base
+  foreground: *text
+
+  left:
+    - river:
+        anchors:
+          - base: &river_base
+              left-margin: 10
+              right-margin: 10 
+              default: {string: {text: "", font: *gomono}}
+              conditions:
+                id == 1: {string: {text: "1", font: *gomono}}  
+                id == 2: {string: {text: "2", font: *gomono}}  
+                id == 3: {string: {text: "3", font: *gomono}}  
+                id == 4: {string: {text: "4", font: *gomono}}  
+                id == 5: {string: {text: "5", font: *gomono}}  
+                id == 6: {string: {text: "6", font: *gomono}}  
+                id == 7: {string: {text: "7", font: *gomono}}  
+                id == 8: {string: {text: "8", font: *gomono}}  
+                id == 9: {string: {text: "9", font: *gomono}}
+
+        content:
+          map:
+            on-click: 
+              left: sh -c "riverctl set-focused-tags $((1 << ({id} - 1)))"
+              right: sh -c "riverctl toggle-focused-tags $((1 << ({id} -1)))"
+              middle: sh -c "riverctl toggle-view-tags $((1 << ({id} -1)))"
+            conditions:
+              state == urgent:
+                map:
+                  <<: *river_base
+                  deco: {background: {color: *red}}
+              state == focused:
+                map:
+                  <<: *river_base
+                  deco: *bg_default
+              state == visible && ~occupied:
+                map:
+                  <<: *river_base
+              state == visible && occupied:
+                map:
+                  <<: *river_base
+                  deco: *bg_default
+              state == unfocused:
+                map:
+                  <<: *river_base
+              state == invisible && ~occupied: {empty: {}}
+              state == invisible && occupied:
+                map:
+                  <<: *river_base
+                  deco: {underline: {size: 3, color: *transparent}}
+
+  center:
+    - script:
+        path: ~/.config/yambar/scripts/dater.sh
+        args: []
+        content:
+            string: 
+                margin: 0
+                text: "{date}"
+                foreground: *subtext0
+                on-click: sh -c "foot calcure"
+    - clock:
+        content:
+          - string:
+                margin: 0
+                text: "{time}"
+
+  right: 
+             
+    - script:
+        path: ~/.config/yambar/scripts/idleinhibit.sh
+        args: []
+        content: 
+            string: 
+                margin: 0
+                text: "{idleinhibit}"
+                font: *nerdfont
+                foreground: *yellow
+                on-click: sh -c "~/.config/yambar/scripts/idleinhibit.sh toggle"
+                
+    - pipewire:
+        anchors:
+          volume: &volume
+            conditions:
+              muted:
+                string:
+                  text: "0%"
+                  foreground: *overlay0
+                  on-click:
+                    middle: sh -c "amixer set Master 1+ toggle" 
+              ~muted:
+                string:
+                  text: "{cubic_volume}%"
+                  foreground: *overlay0
+                  on-click:
+                    left: sh -c "amixer sset Master 2%-"
+                    middle: sh -c "amixer set Master 1+ toggle"
+                    right: sh -c "amixer sset Master 2%+"
+        content:
+          list:
+            items:
+              - map:
+                  conditions:
+                    type == "sink":
+                      map:
+                        conditions:
+                          icon == "audio-headset-bluetooth":
+                            string: {text: "󰋋", font: *nerdfont, foreground: *blue}
+                          muted: {string: {text: "󰝟", font: *nerdfont, foreground: *overlay0}}
+                        default:
+                          - ramp:
+                              tag: cubic_volume
+                              items:
+                                - string: {text: "󰕿", font: *nerdfont, foreground: *blue}
+                                - string: {text: "󰖀", font: *nerdfont, foreground: *blue}
+                                - string: {text: "󰕾", font: *nerdfont, foreground: *blue}
+                    type == "source":
+                      - string: {text: "", font: *nerdfont, left-margin: 5, foreground: *blue}
+              - map:
+                  <<: *volume
+                  
+    - network:
+        content:
+          map:
+            default: {empty: {}}
+            conditions:
+              name == enp6s0:
+                map:
+                  conditions:
+                    ~carrier: {empty: {}}
+                    carrier:
+                      map:
+                       default: {string: {text: "󰈀", font: *nerdfont, foreground: *overlay0}}
+                       on-click:
+                         left: sh -c "foot tui-network"     
+                       conditions:
+                         state == up && ipv4 != "": {string: {text: "󰈀", font: *nerdfont, foreground: *blue}}
+    - script: 
+        path: ~/.config/yambar/scripts/dater.sh
+        content:
+          string:
+            text: ""  
+            font: *nerdfont
+            foreground: *blue
+            on-click:
+              left: sh -c "foot bluetui"
+     

@@ -1,2 +1,0 @@
-#!/bin/sh
-xwayland-satellite &
