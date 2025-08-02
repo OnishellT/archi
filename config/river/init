@@ -4,47 +4,50 @@ TERMINAL="foot"
 LAUNCHER="tofi"
 BROWSER="thorium-browser-avx2-bin"
 FILE_MANAGER="thunar"
-
 # Make focus follow cursor
 riverctl focus-follows-cursor always
 riverctl set-cursor-warp on-focus-change
-
 # --- Launchers & Apps -----------------------------------------
 riverctl map normal Super Return            spawn "$TERMINAL"
 riverctl map normal Super d                 spawn "bash -c 'tofi-drun --drun-launch=true'"
 riverctl map normal Super+Shift W           spawn "$BROWSER"
 riverctl map normal Super E                 spawn "$FILE_MANAGER"
-
 # --- Window Management ---------------------------------------
 riverctl map normal Super q                 close
-riverctl map normal Super+Shift q           spawn "sh $HOME/.config/fuzzel/exit-menu.sh"
 riverctl map normal Super+Control R         spawn "bash -c 'riverctl exit && exec river'"
 riverctl map normal Super v                 toggle-float
 riverctl map normal Super f                 toggle-fullscreen
-
 # --- Focus & Swap (vim hjkl) -----------------------------
-riverctl map normal Super j                 focus-view next
-riverctl map normal Super k                 focus-view previous
-riverctl map normal Super+Shift j           swap next
-riverctl map normal Super+Shift k           swap previous
-
-# --- Move Windows in Layout (vim hjkl + Ctrl) ---------------
-riverctl map normal Super+Control h         send-layout-cmd rivertile "move left"
-riverctl map normal Super+Control l         send-layout-cmd rivertile "move right"
-riverctl map normal Super+Control j         send-layout-cmd rivertile "move down"
-riverctl map normal Super+Control k         send-layout-cmd rivertile "move up"
-riverctl map normal Super+Shift h           send-layout-cmd rivertile "move master"
-riverctl map normal Super+Shift l           send-layout-cmd rivertile "move slave"
-
-# --- Resize Main Area & Gaps (arrow keys) ---------------
-riverctl map normal Super+Left              send-layout-cmd rivertile "main-ratio -0.05"
-riverctl map normal Super+Right             send-layout-cmd rivertile "main-ratio +0.05"
-riverctl map normal Super+Up                send-layout-cmd rivertile "outer-gap -1"
-riverctl map normal Super+Down              send-layout-cmd rivertile "outer-gap +1"
-
+riverctl map normal Super h                 focus-view left
+riverctl map normal Super j                 focus-view down
+riverctl map normal Super k                 focus-view up
+riverctl map normal Super l                 focus-view right
+riverctl map normal Super+Shift h           swap left
+riverctl map normal Super+Shift j           swap down
+riverctl map normal Super+Shift k           swap up
+riverctl map normal Super+Shift l           swap right
+# --- Layout Controls (rivertile) ---------------------------
+riverctl map normal Super H                 send-layout-cmd rivertile "main-ratio -0.05"
+riverctl map normal Super L                 send-layout-cmd rivertile "main-ratio +0.05"
+riverctl map normal Super+Shift H           send-layout-cmd rivertile "main-count +1"
+riverctl map normal Super+Shift L           send-layout-cmd rivertile "main-count -1"
+# --- Window Movement (floating windows) --------------------
+riverctl map normal Super+Alt h             move left 100
+riverctl map normal Super+Alt j             move down 100
+riverctl map normal Super+Alt k             move up 100
+riverctl map normal Super+Alt l             move right 100
+# --- Window Snapping (floating windows) -------------------
+riverctl map normal Super+Alt+Control h     snap left
+riverctl map normal Super+Alt+Control j     snap down
+riverctl map normal Super+Alt+Control k     snap up
+riverctl map normal Super+Alt+Control l     snap right
+# --- Window Resizing (floating windows) --------------------
+riverctl map normal Super+Alt+Shift h       resize horizontal -100
+riverctl map normal Super+Alt+Shift j       resize vertical 100
+riverctl map normal Super+Alt+Shift k       resize vertical -100
+riverctl map normal Super+Alt+Shift l       resize horizontal 100
 # --- System Control -----------------------------------------
 riverctl map normal Super+Shift R           spawn "pkill -SIGTERM yambar && yambar &"
-
 # --- Tag/Workspace Management ------------------------------
 for i in $(seq 1 9); do
     tags=$((1 << (i-1)))
@@ -56,12 +59,10 @@ done
 all_tags=$(((1 << 32) - 1))
 riverctl map normal Super 0                 set-focused-tags $all_tags
 riverctl map normal Super+Shift 0           set-view-tags $all_tags
-
 # --- Mouse ---------------------------------------------------
 riverctl map-pointer normal Super BTN_LEFT   move-view
 riverctl map-pointer normal Super BTN_RIGHT  resize-view
 riverctl map-pointer normal Super BTN_MIDDLE toggle-float
-
 # --- Media & Brightness -------------------------------------
 for mode in normal locked; do
     riverctl map $mode None XF86AudioRaiseVolume spawn 'pamixer -i 5'
@@ -71,19 +72,15 @@ for mode in normal locked; do
     riverctl map $mode None XF86AudioPrev        spawn 'playerctl previous'
     riverctl map $mode None XF86AudioNext        spawn 'playerctl next'
 done
-
 # --- Screenshot --------------------------------------
 riverctl map normal Super+Shift S             spawn "grim -g \"\$(slurp)\" - | swappy -f -"
-
 # --- Passthrough Mode ----------------------------------------
 riverctl declare-mode passthrough
 riverctl map normal Super F11                enter-mode passthrough
 riverctl map passthrough Super F11           enter-mode normal
-
 # --- Output & Monitor Configuration -------------------------
 riverctl map normal Super+Shift O             spawn "wlr-randr"
 riverctl map normal Super+Shift K             spawn "kanshi -c $HOME/.config/kanshi/config"
-
 # --- Input & Touchpad Settings ------------------------------
 for input in $(riverctl list-inputs | grep -i touchpad); do
     riverctl input $input events enabled
@@ -92,11 +89,9 @@ for input in $(riverctl list-inputs | grep -i touchpad); do
     riverctl input $input scroll-method two-finger
     riverctl input $input tap-button-map left-right-middle
 done
-
 # --- XDG Integration & User Dirs ----------------------------
 riverctl map normal Super+Shift U             spawn xdg-user-dirs-update
 riverctl map normal Super+Shift X             spawn xdg-open $HOME
-
 # --- Rules & Autostart --------------------------------------
 riverctl background-color 0x002b36
 riverctl border-color-focused 0x93a1a1
@@ -105,7 +100,6 @@ riverctl set-repeat 50 300
 riverctl rule-add -app-id 'float*'            float
 riverctl rule-add -app-id "$BROWSER"          ssd
 riverctl rule-add -app-id "$FILE_MANAGER"     ssd
-
 # Kill old instances to avoid duplicates
 pkill -SIGTERM polkit-gnome-authentication-agent-1
 pkill -SIGTERM yambar
@@ -113,23 +107,18 @@ pkill -SIGTERM swaync
 pkill -SIGTERM kanshi
 pkill -SIGTERM udiskie
 pkill -SIGTERM swayidle
-
 # Launch core services and utilities
 riverctl spawn "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &"
 riverctl spawn "yambar &"
 riverctl spawn "mako &"
 riverctl spawn "kanshi &"
 riverctl spawn "swaybg -m fill -i $HOME/.config/river/wallpapers/forest.png &"
-
 # --- Layout ---------------------------------------------
 riverctl default-layout rivertile
 rivertile -view-padding 3 -outer-padding 3 &
-
 # Make the border a bit thicker so the color shows
-riverctl set-decoration-parameter global border-width 4
-
+riverctl set-decoration-parameter global border-width 6
 # Focused border (and corners) in Catppuccin Pink
-riverctl set-decoration-parameter global border-color-focused 0xF38BA8z
-
+riverctl set-decoration-parameter global border-color-focused 0xF38BA8
 # Unfocused border in a dimmer gray
 riverctl set-decoration-parameter global border-color-unfocused 0x586E75

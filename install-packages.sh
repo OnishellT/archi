@@ -14,14 +14,16 @@ script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # ──── Package Arrays ───────────────────────────────
 BASE_PACKAGES=(
-  base-devel sudo git fish
-  otf-font-awesome adobe-source-sans-fonts
+  base-devel sudo git fish bluez bluez-utils seatd rsync bluetui
+  lib32-mesa vulkan-radeon lib32-vulkan-radeon libva-mesa-driver libva-utils
+  foot otf-font-awesome adobe-source-sans-fonts ngw-look file-roller
   ttf-sourcecodepro-nerd ttf-jetbrains-mono ttf-jetbrains-mono-nerd
-  htop mpv bat lsd curlie ly zoxide ripgrep wget xdg-utils
-  networkmanager bluez-utils pipewire wireplumber
+  htop mpv bat lsd curlie ly zoxide ripgrep wget xdg-utils swaybg
+  networkmanager bluez-utils pipewire wireplumber lazygit pamixer
   xorg-server xorg-xinit xterm feh acpi xclip udisks2 thunar
   ufw polkit-gnome grim slurp wl-clipboard swappy wlr-randr
   pulsemixer mako playerctl kanshi swaync fd noto-fonts-emoji
+  tumbler ffmpegthumbnailer libopenraw poppler-glib libgsf webp-pixbuf-loader
 )
 
 DWM_PACKAGES=(dwm dmenu picom xwallpaper)
@@ -39,6 +41,7 @@ RIVER_PACKAGES=(
 
 
 AUR_COMMON=(
+  lazydocker
   yambar-git
   tofi
   evil-helix-bin
@@ -215,7 +218,7 @@ setup="river"
 install_base_packages
 install_aur_helper
 setup_services
-setup_rust
+#setup_rust
 setup_icons
 
 # Install River & AUR tools

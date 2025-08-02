@@ -102,19 +102,7 @@ bar:
                 margin: 0
                 text: "{time}"
 
-  right: 
-             
-    - script:
-        path: ~/.config/yambar/scripts/idleinhibit.sh
-        args: []
-        content: 
-            string: 
-                margin: 0
-                text: "{idleinhibit}"
-                font: *nerdfont
-                foreground: *yellow
-                on-click: sh -c "~/.config/yambar/scripts/idleinhibit.sh toggle"
-                
+  right:                             
     - pipewire:
         anchors:
           volume: &volume
@@ -130,9 +118,8 @@ bar:
                   text: "{cubic_volume}%"
                   foreground: *overlay0
                   on-click:
-                    left: sh -c "amixer sset Master 2%-"
+                    left: sh -c "foot pulsemixer"
                     middle: sh -c "amixer set Master 1+ toggle"
-                    right: sh -c "amixer sset Master 2%+"
         content:
           list:
             items:
@@ -181,4 +168,12 @@ bar:
             foreground: *blue
             on-click:
               left: sh -c "foot bluetui"
-     
+    - script:
+        path: ~/.config/yambar/scripts/powermenu.sh
+        content:
+          string:
+            text: ""                   
+            font: *nerdfont            
+            foreground: *peach         
+            on-click:                  
+              left: sh -c "~/.config/yambar/scripts/river-float.sh ~/.config/yambar/scripts/powermenu.sh"
