@@ -1,218 +1,132 @@
 #!/bin/bash
 
-# Artix Hyprland Minimal Setup
-# Requires root execution: sudo ./scriptname
-
-# Check for root
-if [ "$(id -u)" -ne 0 ]; then
-    echo "This script must be run as root. Use sudo."
+# Check if the script is run as root
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root"
     exit 1
 fi
 
-# Configuration
-USERNAME=$(logname)  # Get logged-in user
-USER_HOME=$(eval echo "~$USERNAME")
+# Get the username from the first argument
+USER=$1
 
-# Install essential packages
-pacman -Sy --needed --noconfirm \
-    hyprland \
-    waybar \
-    kitty \
-    xdg-desktop-portal-hyprland \
-    polkit-dinit \
-    noto-fonts \
-    noto-fonts-emoji \
-    ttf-font-awesome \
-    network-manager-applet \
-    gvfs \
-    gnome-keyring \
-    playerctl \
-    jq
+# Check if the user exists
+if ! id "$USER" &>/dev/null; then
+    echo "User $USER does not exist"
+    exit 1
+fi
 
-# Enable dinit services
-dinitctl enable NetworkManager
-dinitctl enable polkit
+# Install necessary packages (including Pipewire and Bluetooth)
+pacman -S --needed hyprland waybar kitty sddm swaybg ttf-dejavu xwayland \
+    pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
+    bluez bluez-utils blueman
+
+# Enable sddm and bluetooth services
+systemctl enable sddm
+systemctl enable bluetooth
 
 # Create config directories
-sudo -u "$USERNAME" mkdir -p "$USER_HOME"/.config/hypr
-sudo -u "$USERNAME" mkdir -p "$USER_HOME"/.config/waybar
-sudo -u "$USERNAME" mkdir -p "$USER_HOME"/.config/kitty
+mkdir -p /home/$USER/.config/hypr
+mkdir -p /home/$USER/.config/waybar
 
+# Write Hyprland configuration
+cat << EOF > /home/$USER/.config/hypr/hyprland.conf
 # Hyprland configuration
-sudo -u "$USERNAME" cat > "$USER_HOME/.config/hypr/hyprland.conf" << 'EOF'
-# Monitor setup (auto-detect recommended)
 monitor=,preferred,auto,1
 
-# Execute apps at launch
-exec-once = dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
-exec-once = systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
-exec-once = waybar
-exec-once = nm-applet --indicator
-exec-once = /usr/lib/polkit-kde-authentication-agent-1
-
-# Input configuration
 input {
     kb_layout = us
-    follow_mouse = 1
-    touchpad {
-        natural_scroll = yes
-    }
 }
 
-# General appearance
 general {
-    gaps_in = 4
-    gaps_out = 8
+    gaps_in = 5
+    gaps_out = 10
     border_size = 2
-    col.active_border = rgba(88ccffee) rgba(00aaffee) 45deg
-    col.inactive_border = rgba(595959aa)
-    layout = dwindle
+    col.active_border = 0x66ee1111
+    col.inactive_border = 0x66333333
 }
 
-# Animations (minimal but polished)
+decoration {
+    rounding = 5
+    drop_shadow = yes
+    shadow_range = 10
+    shadow_render_power = 3
+}
+
 animations {
     enabled = yes
-    bezier = linear, 0.0, 0.0, 1.0, 1.0
-    animation = windows, 1, 3, linear
-    animation = border, 1, 5, linear
-    animation = fade, 1, 5, linear
-    animation = workspaces, 1, 3, linear
+    animation = windows, 1, 3, default
+    animation = fade, 1, 3, default
 }
 
-# Window rules
-dwindle {
-    pseudotile = yes
-    preserve_split = yes
-}
+# Keybindings
+bind = SUPER, Return, exec, kitty
+bind = SUPER, Q, killactive
+bind = SUPER, left, movefocus, l
+bind = SUPER, right, movefocus, r
+bind = SUPER, up, movefocus, u
+bind = SUPER, down, movefocus, d
+bind = SUPER, 1, workspace, 1
+bind = SUPER, 2, workspace, 2
+bind = SUPER, 3, workspace, 3
+bind = SUPER, 4, workspace, 4
+bind = SUPER, 5, workspace, 5
+bind = SUPER, 6, workspace, 6
+bind = SUPER, 7, workspace, 7
+bind = SUPER, 8, workspace, 8
+bind = SUPER, 9, workspace, 9
+bind = SUPER, 0, workspace, 10
+bind = SUPER SHIFT, 1, movetoworkspace, 1
+bind = SUPER SHIFT, 2, movetoworkspace, 2
+bind = SUPER SHIFT, 3, movetoworkspace, 3
+bind = SUPER SHIFT, 4, movetoworkspace, 4
+bind = SUPER SHIFT, 5, movetoworkspace, 5
+bind = SUPER SHIFT, 6, movetoworkspace, 6
+bind = SUPER SHIFT, 7, movetoworkspace, 7
+bind = SUPER SHIFT, 8, movetoworkspace, 8
+bind = SUPER SHIFT, 9, movetoworkspace, 9
+bind = SUPER SHIFT, 0, movetoworkspace, 10
 
-# Key bindings
-$mainMod = SUPER
-bind = $mainMod, RETURN, exec, kitty
-bind = $mainMod, Q, killactive,
-bind = $mainMod, M, exit,
-bind = $mainMod, V, togglefloating,
-bind = $mainMod, J, togglesplit,
-bind = $mainMod, F, fullscreen,
-bind = $mainMod, left, movefocus, l
-bind = $mainMod, right, movefocus, r
-bind = $mainMod, up, movefocus, u
-bind = $mainMod, down, movefocus, d
-bind = $mainMod, 1, workspace, 1
-bind = $mainMod, 2, workspace, 2
-bind = $mainMod, 3, workspace, 3
-bind = $mainMod, 4, workspace, 4
-bind = $mainMod, 5, workspace, 5
-bind = $mainMod, mouse_down, workspace, e+1
-bind = $mainMod, mouse_up, workspace, e-1
-bindm = $mainMod, mouse:272, movewindow
-bindm = $mainMod, mouse:273, resizewindow
-
-# Workspace rules
-workspace = 1, default:true
-workspace = 2
-workspace = 3
-workspace = 4
-workspace = 5
+# Execute on startup
+exec-once = swaybg -c #002b36
+exec-once = waybar
+exec-once = blueman-applet
 EOF
 
-# Waybar configuration
-sudo -u "$USERNAME" cat > "$USER_HOME/.config/waybar/config" << 'EOF'
+# Write Waybar configuration (with pulseaudio and tray modules)
+cat << EOF > /home/$USER/.config/waybar/config
 {
+    "layer": "top",
     "position": "top",
-    "height": 30,
+    "height": 24,
     "modules-left": ["hyprland/workspaces"],
-    "modules-center": ["clock"],
-    "modules-right": ["tray"],
+    "modules-center": [],
+    "modules-right": ["pulseaudio", "clock", "tray"],
     "hyprland/workspaces": {
-        "format": "{name}",
-        "on-click": "activate"
+        "format": "{name}"
     },
     "clock": {
-        "format": " {:L%H:%M}",
-        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+        "format": "{:%H:%M}"
+    },
+    "pulseaudio": {
+        "format": "{volume}% {icon}",
+        "format-icons": {
+            "default": ["", "", ""]
+        }
     },
     "tray": {
-        "icon-size": 16,
-        "spacing": 8
+        "spacing": 10
     }
 }
 EOF
 
-# Waybar CSS
-sudo -u "$USERNAME" cat > "$USER_HOME/.config/waybar/style.css" << 'EOF'
-* {
-    border: none;
-    font-family: "Noto Sans", "Font Awesome 6 Free";
-    font-size: 14px;
-    min-height: 0;
-}
+# Set ownership of config files
+chown -R $USER:$USER /home/$USER/.config/hypr
+chown -R $USER:$USER /home/$USER/.config/waybar
 
-window#waybar {
-    background: rgba(30, 30, 46, 0.7);
-    color: #cdd6f4;
-    border-bottom: 1px solid rgba(100, 100, 100, 0.2);
-}
+# Enable Pipewire user services
+runuser -u $USER -- systemctl --user enable pipewire pipewire-pulse wireplumber
 
-#workspaces button {
-    padding: 0 8px;
-    color: #585b70;
-    background: transparent;
-    border-bottom: 2px solid transparent;
-}
-
-#workspaces button.active {
-    color: #cdd6f4;
-    border-bottom: 2px solid #89b4fa;
-}
-
-#workspaces button:hover {
-    background: rgba(166, 173, 200, 0.15);
-}
-
-#clock {
-    padding: 0 12px;
-    color: #f5e0dc;
-    background: rgba(180, 130, 173, 0.3);
-    border-radius: 4px;
-    margin: 4px 2px;
-}
-
-#tray {
-    margin-right: 4px;
-}
-EOF
-
-# Kitty configuration
-sudo -u "$USERNAME" cat > "$USER_HOME/.config/kitty/kitty.conf" << 'EOF'
-font_family      Noto Sans
-font_size        11
-scrollback_lines 2000
-background_opacity 0.85
-window_padding_width 8
-EOF
-
-# Set file permissions
-chown -R "$USERNAME":"$USERNAME" "$USER_HOME/.config"
-
-# Create autostart script
-sudo -u "$USERNAME" mkdir -p "$USER_HOME/.local/bin"
-sudo -u "$USERNAME" cat > "$USER_HOME/.local/bin/hyprland-autostart" << 'EOF'
-#!/bin/sh
-systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
-dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
-exec dbus-launch Hyprland
-EOF
-
-chmod +x "$USER_HOME/.local/bin/hyprland-autostart"
-
-# Update .bash_profile
-echo "[[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]] && exec $USER_HOME/.local/bin/hyprland-autostart" | sudo -u "$USERNAME" tee -a "$USER_HOME/.bash_profile" > /dev/null
-
-# Final instructions
-echo "Installation complete!"
-echo "Reboot and log in to start Hyprland automatically."
-echo "Basic controls:"
-echo "  Super + Enter: Launch terminal"
-echo "  Super + Q: Close window"
-echo "  Super + M: Exit session"
-echo "  Super + [1-5]: Switch workspaces"
+# Completion message
+echo "Setup complete. Audio and Bluetooth have been configured with Pipewire and Blueman."
+echo "Please reboot the system to start using Hyprland with full audio and Bluetooth support."
+echo "For more information on using Hyprland, visit https://wiki.hyprland.org"
