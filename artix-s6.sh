@@ -1,157 +1,354 @@
 #!/bin/sh
+# Install script for my dotfiles (minidots) - Artix Dinit Compatible
 
-# Check if the script is run as root
-if [ "$(id -u)" -ne 0 ]; then
-    echo "Please run this script as root."
-    exit 1
+# Text color variables for styling
+CR='\033[0;31m'; CG='\033[0;32m'; CY='\033[0;36m'; CB='\033[0;34m'; CRE='\033[0m'
+
+# Exit if script is ran as root
+[ "$(id -u)" -ne 0 ] || {
+  printf "${CR}Do not run this script with root privileges! Exiting...${CRE}\n"
+  exit 1
+}
+
+# Check if we're on Artix
+if ! grep -q "Artix" /etc/os-release; then
+  printf "${CR}This script is specifically designed for Artix Linux with dinit!${CRE}\n"
+  printf "${CB}For other distributions, use the original script.${CRE}\n"
+  exit 1
 fi
 
-# Set target disk and partitions (adjust as needed)
-TARGET_DISK="/dev/sda"
-BOOT_PART="${TARGET_DISK}1"
-ROOT_PART="${TARGET_DISK}2"
+# Check if dinit is available
+if ! command -v dinitctl >/dev/null; then
+  printf "${CR}Dinit not found! This script requires Artix with dinit.${CRE}\n"
+  exit 1
+fi
 
-# Partition the disk
-echo "Partitioning the disk..."
-parted -s "$TARGET_DISK" mklabel gpt
-parted -s "$TARGET_DISK" mkpart primary 0% 512MiB
-parted -s "$TARGET_DISK" set 1 boot on
-part Target_DISK="${TARGET_DISK}2"
+# Alias sudo to installed sudo util (prefer doas on Artix)
+command -v doas >/dev/null && alias sudo="doas --" || {
+  command -v sudo >/dev/null || { 
+    command -v ssu >/dev/null && alias sudo="ssu -p --"
+  }
+}
 
-# Partition the disk
-echo "Partitioning the disk..."
-parted -s "$TARGET_DISK" mklabel gpt
-parted -s "$TARGET_DISK" mkpart primary 0% 512MiB
-parted -s "$TARGET_DISK" set 1 boot on
-parted -s "$TARGET_DISK" mkpart primary 512MiB 100%
+# Modify system configs
+printf "${CB}Editing system configuration files for Artix dinit...${CRE}\n"
+{
+  # Configure doas (preferred on Artix)
+  if command -v doas >/dev/null; then
+    sudo sh -c "printf '# Allow wheel group with password persistence\npermit persist :wheel\n# Allow wheel group without password (uncomment if needed)\n# permit nopass :wheel\n' > /etc/doas.conf"
+    printf "${CB}Configured doas for wheel group${CRE}\n"
+  elif command -v sudo >/dev/null; then
+    sudo sed -i 's/^#\s*\(%wheel ALL=(ALL:ALL) ALL\)/\1/; s/^#\s*\(%wheel ALL=(ALL:ALL) NOPASSWD: ALL\)/\1/' /etc/sudoers
+    printf "${CB}Configured sudo for wheel group${CRE}\n"
+  fi
 
-# Format partitions
-echo "Formatting partitions..."
-mkfs.fat -F32 "$BOOT_PART"
-mkfs.ext4 "$ROOT_PART"
+  # Configure dinit auto-login on tty1
+  if [ -f /etc/dinit.d/tty1 ]; then
+    sudo sed -i "s|^\(command[[:space:]]*=[[:space:]]*/usr/lib/dinit/agetty-default\)|\1 -a $USER|" /etc/dinit.d/tty1
+    printf "${CB}Configured dinit auto-login for $USER on tty1${CRE}\n"
+  fi
 
-# Mount partitions
-echo "Mounting partitions..."
-mount "$ROOT_PART" /mnt
-mkdir /mnt/boot
-mount "$BOOT_PART" /mnt/boot
+  # Configure GRUB
+  if command -v grub-mkconfig >/dev/null; then
+    sudo sed -i 's/^GRUB_TIMEOUT=[0-9]\+/GRUB_TIMEOUT=1/; s/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/; s/^#\s*\(GRUB_SAVEDEFAULT=true\)/\1/' /etc/default/grub
+    printf "${CB}Configured GRUB settings${CRE}\n"
+  fi
 
-# Install base system and essential packages
-echo "Installing base system and packages..."
-basestrap /mnt base base-devel dinit dinit-artix git wlroots wayland wayland-protocols libxkbcommon xorg-xwayland pipewire pipewire-pulse wireplumber bluez bluez-utils dunst foot ttf-dejavu swaybg grub efibootmgr
+  # Configure makepkg for better compilation
+  if command -v pacman >/dev/null; then
+    if ! grep -q "MAKEFLAGS" /etc/makepkg.conf; then
+      sudo tee -a /etc/makepkg.conf <<EOF >/dev/null
 
-# Generate fstab
-echo "Generating fstab..."
-fstabgen -U /mnt >> /mnt/etc/fstab
-
-# Chroot into the new system for configuration
-echo "Configuring the system..."
-artix-chroot /mnt /bin/bash <<EOF
-
-# Set hostname
-echo "artix" > /etc/hostname
-
-# Set locale
-echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
-locale-gen
-echo "LANG=en_US.UTF-8" > /etc/locale.conf
-
-# Set timezone (adjust as needed)
-ln -sf /usr/share/zoneinfo/America/New_York /etc/localtime
-hwclock --systohc
-
-# Set root password
-echo "root:root" | chpasswd
-
-# Enable Arch mirrors for additional packages
-pacman -S --noconfirm artix-archlinux-support
-echo -e "\n[extra]\nInclude = /etc/pacman.d/mirrorlist-arch\n\n[multilib]\nInclude = /etc/pacman.d/mirrorlist-arch" >> /etc/pacman.conf
-pacman -Syu --noconfirm
-
-# Install GRUB
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=artix
-grub-mkconfig -o /boot/grub/grub.cfg
-
-# Create user
-useradd -m -G wheel,audio,video,bluetooth -s /bin/bash user
-echo "user:user" | chpasswd
-
-# Set up sudo
-echo "%wheel ALL=(ALL) ALL" > /etc/sudoers.d/wheel
-
-# Clone and build DWL
-su - user -c "mkdir -p /home/user/.local/src"
-su - user -c "git clone https://codeberg.org/oceanicc/dwl /home/user/.local/src/dwl"
-su - user -c "cd /home/user/.local/src/dwl && [ -f config.def.h ] && cp config.def.h config.h"
-su - user -c "cd /home/user/.local/src/dwl && make && sudo make install"
-
-# Clone and build minibar
-su - user -c "git clone https://codeberg.org/oceanicc/minibar /home/user/.local/src/minibar"
-su - user -c "cd /home/user/.local/src/minibar && make && sudo make install"
-
-# Configure foot terminal
-mkdir -p /home/user/.config/foot
-cat << 'EOT' > /home/user/.config/foot/foot.ini
-[main]
-font=monospace:size=12
-[colors]
-background=002b36
-foreground=839496
-regular0=073642
-regular1=dc322f
-regular2=859900
-regular3=b58900
-regular4=268bd2
-regular5=d33682
-regular6=2aa198
-regular7=eee8d5
-EOT
-
-# Configure Dunst notification daemon
-mkdir -p /home/user/.config/dunst
-cat << 'EOT' > /home/user/.config/dunst/dunstrc
-[global]
-    font = Monospace 10
-    geometry = "300x5-30+20"
-    transparency = 10
-    frame_color = "#002b36"
-    separator_color = frame
-[urgency_low]
-    background = "#002b36"
-    foreground = "#839496"
-[urgency_normal]
-    background = "#073642"
-    foreground = "#eee8d5"
-[urgency_critical]
-    background = "#dc322f"
-    foreground = "#fdf6e3"
-EOT
-
-# Create DWL startup script
-mkdir -p /home/user/.local/bin
-cat << 'EOT' > /home/user/.local/bin/startdwl.sh
-#!/bin/sh
-swaybg -c '#002b36' &
-pipewire &
-pipewire-pulse &
-wireplumber &
-dunst &
-dwl -b /usr/local/bin/minibar
-EOT
-chmod +x /home/user/.local/bin/startdwl.sh
-
-# Enable services with Dinit
-dinitctl enable bluetoothd
-
-# Set ownership
-chown -R user:user /home/user/.config /home/user/.local
-
-# Exit chroot
-exit
+# Custom compilation flags for better performance
+COMMON_FLAGS="-O2 -march=native -pipe -flto"
+export CFLAGS="\$COMMON_FLAGS"
+export CXXFLAGS="\$COMMON_FLAGS"
+export LDFLAGS="\$COMMON_FLAGS"
+export FCFLAGS="\$COMMON_FLAGS"
+export FFLAGS="\$COMMON_FLAGS"
+export MAKEFLAGS="-j\$(nproc)"
 EOF
+      printf "${CB}Configured makepkg compilation flags${CRE}\n"
+    fi
+  fi
+} && printf "${CG}Successfully edited system configs for Artix dinit${CRE}\n"
 
-# Unmount partitions
-echo "Unmounting partitions..."
-umount -R /mnt
+# Artix specific setup
+printf "${CB}Setting up Artix-specific configurations...${CRE}\n"
+{
+  # Enable arch mirrors for access to AUR and additional packages
+  printf "${CB}Setting up ${CY}arch-mirrors${CB} for pacman...${CRE}\n"
+  sudo pacman -Syu --noconfirm artix-archlinux-support
+  
+  # Add arch repositories if not already present
+  if ! grep -q "mirrorlist-arch" /etc/pacman.conf; then
+    sudo tee -a /etc/pacman.conf <<EOF >/dev/null
 
-echo "Installation complete! Reboot to use your new Artix system."
+# Arch repositories for additional packages
+[extra]
+Include = /etc/pacman.d/mirrorlist-arch
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist-arch
+EOF
+    printf "${CB}Added Arch repositories to pacman.conf${CRE}\n"
+  fi
+  
+  # Update package database
+  sudo pacman -Sy
+  
+  # Install yay AUR helper
+  if ! command -v yay >/dev/null; then
+    printf "${CB}Installing ${CY}yay${CB} (AUR helper)...${CRE}\n"
+    sudo pacman -S --noconfirm git base-devel
+    git clone https://aur.archlinux.org/yay-bin.git
+    (cd yay-bin/ && makepkg -si --noconfirm)
+    rm -rf yay-bin
+    printf "${CG}Successfully installed yay${CRE}\n"
+  fi
+} && printf "${CG}Successfully completed Artix-specific setup${CRE}\n"
+
+# Install packages
+printf "${CB}Installing packages...${CRE}\n"
+if [ -f ./pkg-list.sh ]; then
+  sh ./pkg-list.sh && printf "${CG}Successfully installed all packages${CRE}\n"
+else
+  printf "${CY}pkg-list.sh not found, skipping package installation${CRE}\n"
+fi
+
+# Enable dinit services
+printf "${CB}Enabling ${CY}dinit${CB} services for Artix...${CRE}\n"
+{
+  # System services
+  printf "${CB}Enabling system services...${CRE}\n"
+  for service in NetworkManager bluetoothd dbus turnstiled; do
+    if [ -f "/etc/dinit.d/$service" ]; then
+      sudo dinitctl enable "$service"
+      printf "${CB}Enabled $service${CRE}\n"
+    else
+      printf "${CY}Service $service not found, skipping${CRE}\n"
+    fi
+  done
+  
+  # User services (copy custom service files if they exist)
+  if [ -d ./services ]; then
+    printf "${CB}Setting up user services...${CRE}\n"
+    sudo mkdir -p /etc/dinit.d/user/
+    for service in mpd syncthing easyeffects; do
+      if [ -f "./services/$service" ]; then
+        sudo cp "./services/$service" /etc/dinit.d/user/
+        printf "${CB}Copied user service: $service${CRE}\n"
+      fi
+    done
+  fi
+  
+  # Enable essential dinit services that might not be enabled by default
+  for service in dbus; do
+    if [ -f "/etc/dinit.d/$service" ]; then
+      sudo dinitctl enable "$service"
+      printf "${CB}Ensured $service is enabled${CRE}\n"
+    fi
+  done
+} && printf "${CG}Successfully enabled dinit services${CRE}\n"
+
+# Install themes
+printf "${CB}Installing ${CY}gtk and cursor themes${CB}...${CRE}\n"
+{
+  # Clean up existing gtk-4.0 config
+  rm -rf ~/.config/gtk-4.0/
+  mkdir -p ~/.config
+  
+  # Install custom theme if available
+  if [ -d ./minidark ]; then
+    sudo cp -r ./minidark /usr/share/themes
+    ln -s /usr/share/themes/minidark/gtk-4.0/ ~/.config/
+    printf "${CB}Installed minidark theme${CRE}\n"
+  fi
+  
+  # Configure papirus folders if available
+  if command -v papirus-folders >/dev/null; then
+    papirus-folders -C nordic
+    printf "${CB}Configured papirus folders${CRE}\n"
+  fi
+  
+  # Set default cursor theme
+  sudo mkdir -p /usr/share/icons/default/
+  sudo tee /usr/share/icons/default/index.theme <<EOF >/dev/null
+[Icon Theme]
+Inherits=Bibata-Modern-Ice
+EOF
+  printf "${CB}Set default cursor theme${CRE}\n"
+} && printf "${CG}Successfully installed themes${CRE}\n"
+
+# Stow dotfiles
+printf "${CB}Linking ${CY}dotfiles${CB} with GNU Stow...${CRE}\n"
+{
+  # Create necessary directories
+  dir_list=".local/src .local/share/mpd/playlists .config/spicetify .config/ncmpcpp .cache/wal .cache/script-cache"
+  for i in $dir_list; do
+    dir="$HOME/$i"
+    mkdir -p "$dir" && printf "${CB}Created $dir${CRE}\n"
+  done
+  
+  # Remove conflicting files
+  rm -f ~/.bash* ~/.inputrc
+  
+  # Stow dotfiles (assuming we're in the dotfiles directory)
+  if command -v stow >/dev/null; then
+    (cd .. && stow . 2>/dev/null) || {
+      printf "${CY}Stow failed, trying direct copy method${CRE}\n"
+      # Fallback: direct copy method
+      cp -r ../.* ~/ 2>/dev/null || true
+    }
+    printf "${CB}Linked dotfiles${CRE}\n"
+  else
+    printf "${CR}GNU Stow not found! Install it first: sudo pacman -S stow${CRE}\n"
+    return 1
+  fi
+} && printf "${CG}Successfully linked dotfiles${CRE}\n"
+
+# Configure script-cache files
+printf "${CB}Configuring ${CY}script-cache${CB} files...${CRE}\n"
+{
+  mkdir -p ~/.cache/script-cache
+  
+  # Graphic configuration (default to free drivers)
+  printf "${CB}Configuring ${CY}graphic-command${CB} script...${CRE}\n"
+  tee ~/.cache/script-cache/graphic-command <<EOF >/dev/null
+#!/bin/sh
+# Using open source drivers (modify if you have proprietary GPU drivers)
+# For NVIDIA proprietary:
+# sudo modprobe -r nvidia_drm nvidia_modeset nvidia_uvm nvidia
+# sudo modprobe nouveau
+# For AMD/Intel: usually no action needed
+echo "Using open source GPU drivers"
+EOF
+  printf "Open Source\ncustom" > ~/.cache/script-cache/graphic-info
+  
+  # Wallpaper and colorscheme defaults
+  printf "${CB}Setting up ${CY}wallpaper${CB} and ${CY}colorscheme${CB} defaults...${CRE}\n"
+  tee ~/.cache/script-cache/wallpaper <<EOF >/dev/null
+export previous_wallpaper="\$HOME/minidots/extras/wall.png"
+export wallpaper="\$HOME/minidots/extras/wall.png"
+EOF
+  printf "export colorscheme=custom-metal" > ~/.cache/script-cache/colorscheme
+  
+  # Make scripts executable
+  for i in graphic-command graphic-info wallpaper colorscheme; do
+    chmod +x "$HOME/.cache/script-cache/$i"
+  done
+} && printf "${CG}Successfully configured script-cache files${CRE}\n"
+
+# Clone and compile programs
+printf "${CB}Cloning and compiling programs...${CRE}\n"
+{
+  clone() { 
+    if [ -n "$2" ]; then
+      git clone --depth=1 "$1" "$2" 
+    else
+      git clone --depth=1 "$1"
+    fi && printf "${CG}Successfully cloned ${CY}$1${CRE}\n" || {
+      printf "${CR}Failed to clone ${CY}$1${CRE}\n"
+      return 1
+    }
+  }
+  
+  # Clone configurations
+  if [ ! -d "$HOME/.config/nvim" ]; then
+    clone https://codeberg.org/oceanicc/comfynvim "$HOME/.config/nvim"
+  fi
+  
+  if [ ! -d "$HOME/.config/shell/plugins/powerlevel10k" ]; then
+    mkdir -p "$HOME/.config/shell/plugins"
+    clone https://github.com/romkatv/powerlevel10k.git "$HOME/.config/shell/plugins/powerlevel10k"
+  fi
+  
+  # Clone and compile source programs
+  cd "$HOME/.local/src/" || { printf "${CR}Failed to enter .local/src${CRE}\n"; exit 1; }
+  
+  for repo in oceanicc/minibar oceanicc/dwl sewn/wlock sewn/widle sewn/wfreeze; do
+    prog_name=$(basename "$repo")
+    if [ ! -d "$prog_name" ]; then
+      clone "https://codeberg.org/$repo.git" || continue
+    fi
+  done
+  
+  # Create color links for programs that need them
+  if [ -d dwl ]; then
+    ln -sf "$HOME/.cache/wal/colors.h" "$HOME/.local/src/dwl/colors.h"
+  fi
+  if [ -d mew ]; then
+    ln -sf "$HOME/.cache/wal/colors.h" "$HOME/.local/src/mew/colors.h"
+  fi
+  
+  # Compile programs
+  printf "${CB}Compiling programs...${CRE}\n"
+  for dir in wlock widle wfreeze minibar dwl mew; do
+    if [ -d "$dir" ]; then
+      printf "${CB}Compiling ${CY}$dir${CB}...${CRE}\n"
+      (
+        cd "$dir" || exit 1
+        sudo make clean install 2>/dev/null || make clean install
+        make clean 2>/dev/null || true
+      ) && printf "${CG}Compiled ${CY}$dir${CRE}\n" || \
+        printf "${CR}Failed to compile ${CY}$dir${CRE}\n"
+    fi
+  done
+} && printf "${CG}Successfully set up programs${CRE}\n"
+
+# Final system configuration
+printf "${CB}Applying final system configurations...${CRE}\n"
+{
+  # Change /bin/sh to dash for better performance
+  if command -v dash >/dev/null; then
+    printf "${CB}Changing /bin/sh to ${CY}dash${CB}...${CRE}\n"
+    sudo ln -sfT /usr/bin/dash /bin/sh
+    printf "${CG}Changed shell to dash${CRE}\n"
+  fi
+  
+  # Prompt for zsh shell change
+  printf "${CB}Do you want to change the user shell to zsh? [y/N]: ${CRE}"
+  read -r shell
+  case "$shell" in
+    [Yy]*)
+      if command -v zsh >/dev/null; then
+        printf "${CB}Changing user shell to ${CY}zsh${CB}...${CRE}\n"
+        chsh -s "$(command -v zsh)"
+        printf "${CG}Changed user shell to zsh${CRE}\n"
+      else
+        printf "${CR}zsh not found! Install it first.${CRE}\n"
+      fi
+      ;;
+  esac
+  
+  # Add user to necessary groups for Artix dinit
+  printf "${CB}Adding $USER to necessary groups...${CRE}\n"
+  for grp in audio video input seat; do
+    if getent group "$grp" >/dev/null 2>&1; then
+      sudo usermod -aG "$grp" "$USER"
+      printf "${CB}Added $USER to $grp group${CRE}\n"
+    fi
+  done
+  
+  # Regenerate GRUB config
+  if command -v grub-mkconfig >/dev/null; then
+    printf "${CB}Regenerating GRUB configuration...${CRE}\n"
+    sudo grub-mkconfig -o /boot/grub/grub.cfg
+    printf "${CG}GRUB configuration updated${CRE}\n"
+  fi
+} && printf "${CG}Successfully applied final configurations${CRE}\n"
+
+# Print completion message
+printf "\n${CG}=================================${CRE}\n"
+printf "${CG}Installation completed successfully!${CRE}\n"
+printf "${CG}=================================${CRE}\n\n"
+printf "${CB}Next steps:${CRE}\n"
+printf "${CB}1. Reboot your system: ${CY}sudo reboot${CRE}\n"
+printf "${CB}2. After rebooting, run any post-install scripts${CRE}\n"
+printf "${CB}3. Log into your window manager${CRE}\n"
+printf "${CB}4. Enjoy your new Artix dinit setup!${CRE}\n\n"
+
+printf "${CY}Note: Some services may need manual configuration after reboot.${CRE}\n"
+printf "${CY}Check dinit service status with: dinitctl list${CRE}\n"
+
+exit 0
