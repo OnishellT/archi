@@ -239,16 +239,56 @@ EOF
   done
 } && printf "${CG}Successfully configured script-cache files${CRE}\n"
 
+# Check wlroots version compatibility
+printf "${CB}Checking wlroots compatibility...${CRE}\n"
+WLROOTS_VERSION=$(pacman -Qi wlroots 2>/dev/null | grep Version | awk '{print $3}' | cut -d'-' -f1)
+if [ -z "$WLROOTS_VERSION" ]; then
+  printf "${CB}Installing wlroots...${CRE}\n"
+  sudo pacman -S --noconfirm wlroots
+  WLROOTS_VERSION=$(pacman -Qi wlroots | grep Version | awk '{print $3}' | cut -d'-' -f1)
+fi
+
+printf "${CB}Detected wlroots version: ${CY}$WLROOTS_VERSION${CRE}\n"
+
+# Determine compatible dwl branch based on wlroots version
+case "$WLROOTS_VERSION" in
+  0.18*)
+    DWL_BRANCH="wlroots-0.18"
+    printf "${CB}Using dwl branch for wlroots 0.18${CRE}\n"
+    ;;
+  0.17*)
+    DWL_BRANCH="wlroots-0.17"
+    printf "${CB}Using dwl branch for wlroots 0.17${CRE}\n"
+    ;;
+  0.19*)
+    DWL_BRANCH="main"
+    printf "${CB}Using dwl main branch for wlroots 0.19${CRE}\n"
+    ;;
+  *)
+    printf "${CY}Unknown wlroots version, using main branch${CRE}\n"
+    DWL_BRANCH="main"
+    ;;
+esac
+
 # Clone and compile programs
 printf "${CB}Cloning and compiling programs...${CRE}\n"
 {
   clone() { 
-    if [ -n "$2" ]; then
-      git clone --depth=1 "$1" "$2" 
+    local repo="$1"
+    local dest="$2"
+    local branch="$3"
+    
+    if [ -n "$dest" ]; then
+      if [ -n "$branch" ]; then
+        git clone --depth=1 -b "$branch" "$repo" "$dest" 2>/dev/null || \
+        git clone --depth=1 "$repo" "$dest"
+      else
+        git clone --depth=1 "$repo" "$dest"
+      fi
     else
-      git clone --depth=1 "$1"
-    fi && printf "${CG}Successfully cloned ${CY}$1${CRE}\n" || {
-      printf "${CR}Failed to clone ${CY}$1${CRE}\n"
+      git clone --depth=1 "$repo"
+    fi && printf "${CG}Successfully cloned ${CY}$repo${CRE}\n" || {
+      printf "${CR}Failed to clone ${CY}$repo${CRE}\n"
       return 1
     }
   }
@@ -266,10 +306,20 @@ printf "${CB}Cloning and compiling programs...${CRE}\n"
   # Clone and compile source programs
   cd "$HOME/.local/src/" || { printf "${CR}Failed to enter .local/src${CRE}\n"; exit 1; }
   
-  for repo in oceanicc/minibar oceanicc/dwl sewn/wlock sewn/widle sewn/wfreeze; do
+  # Clone dwl with appropriate branch for wlroots compatibility
+  if [ ! -d "dwl" ]; then
+    printf "${CB}Cloning dwl with branch ${CY}$DWL_BRANCH${CB}...${CRE}\n"
+    clone "https://codeberg.org/oceanicc/dwl.git" "dwl" "$DWL_BRANCH" || {
+      printf "${CY}Specific branch failed, trying main branch...${CRE}\n"
+      clone "https://codeberg.org/oceanicc/dwl.git" "dwl"
+    }
+  fi
+  
+  # Clone other programs
+  for repo in oceanicc/minibar sewn/wlock sewn/widle sewn/wfreeze; do
     prog_name=$(basename "$repo")
     if [ ! -d "$prog_name" ]; then
-      clone "https://codeberg.org/$repo.git" || continue
+      clone "https://codeberg.org/$repo.git" "$prog_name" || continue
     fi
   done
   
