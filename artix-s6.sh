@@ -241,32 +241,74 @@ EOF
 
 # Check wlroots version compatibility
 printf "${CB}Checking wlroots compatibility...${CRE}\n"
-WLROOTS_VERSION=$(pacman -Qi wlroots 2>/dev/null | grep Version | awk '{print $3}' | cut -d'-' -f1)
-if [ -z "$WLROOTS_VERSION" ]; then
-  printf "${CB}Installing wlroots...${CRE}\n"
-  sudo pacman -S --noconfirm wlroots
+
+# Check for wlroots-git or regular wlroots
+WLROOTS_VERSION=""
+if pacman -Qi wlroots-git >/dev/null 2>&1; then
+  WLROOTS_VERSION=$(pacman -Qi wlroots-git | grep Version | awk '{print $3}' | cut -d'-' -f1)
+  printf "${CB}Found wlroots-git version: ${CY}$WLROOTS_VERSION${CRE}\n"
+elif pacman -Qi wlroots >/dev/null 2>&1; then
   WLROOTS_VERSION=$(pacman -Qi wlroots | grep Version | awk '{print $3}' | cut -d'-' -f1)
+  printf "${CB}Found wlroots version: ${CY}$WLROOTS_VERSION${CRE}\n"
 fi
 
-printf "${CB}Detected wlroots version: ${CY}$WLROOTS_VERSION${CRE}\n"
+# If no wlroots found or version mismatch, offer to install correct version
+if [ -z "$WLROOTS_VERSION" ] || [ "$WLROOTS_VERSION" = "0.20" ]; then
+  printf "${CY}Warning: dwl typically requires wlroots 0.19, but found version $WLROOTS_VERSION${CRE}\n"
+  printf "${CB}Do you want to install wlroots-0.19-git for better compatibility? [y/N]: ${CRE}"
+  read -r install_019
+  case "$install_019" in
+    [Yy]*)
+      printf "${CB}Removing current wlroots and installing wlroots-0.19-git...${CRE}\n"
+      # Remove current wlroots
+      if pacman -Qi wlroots-git >/dev/null 2>&1; then
+        yay -R --noconfirm wlroots-git
+      fi
+      if pacman -Qi wlroots >/dev/null 2>&1; then
+        sudo pacman -R --noconfirm wlroots
+      fi
+      # Install wlroots 0.19
+      yay -S --noconfirm wlroots-0.19-git || {
+        printf "${CR}Failed to install wlroots-0.19-git, trying wlroots-0.19-mao-git...${CRE}\n"
+        yay -S --noconfirm wlroots-0.19-mao-git || {
+          printf "${CR}Failed to install wlroots 0.19. Continuing with current setup...${CRE}\n"
+        }
+      }
+      WLROOTS_VERSION="0.19"
+      ;;
+    *)
+      printf "${CB}Continuing with current wlroots version...${CRE}\n"
+      ;;
+  esac
+fi
 
-# Determine compatible dwl branch based on wlroots version
+# Determine compatible dwl branch/repository based on wlroots version
 case "$WLROOTS_VERSION" in
   0.18*)
     DWL_BRANCH="wlroots-0.18"
+    DWL_REPO="https://codeberg.org/oceanicc/dwl.git"
     printf "${CB}Using dwl branch for wlroots 0.18${CRE}\n"
     ;;
   0.17*)
-    DWL_BRANCH="wlroots-0.17"
+    DWL_BRANCH="wlroots-0.17" 
+    DWL_REPO="https://codeberg.org/oceanicc/dwl.git"
     printf "${CB}Using dwl branch for wlroots 0.17${CRE}\n"
     ;;
   0.19*)
     DWL_BRANCH="main"
+    DWL_REPO="https://codeberg.org/oceanicc/dwl.git"
     printf "${CB}Using dwl main branch for wlroots 0.19${CRE}\n"
     ;;
-  *)
-    printf "${CY}Unknown wlroots version, using main branch${CRE}\n"
+  0.20*)
+    # For wlroots 0.20, try upstream dwl which might be more current
     DWL_BRANCH="main"
+    DWL_REPO="https://codeberg.org/dwl/dwl.git"
+    printf "${CB}Using upstream dwl main branch for wlroots 0.20${CRE}\n"
+    ;;
+  *)
+    printf "${CY}Unknown wlroots version ($WLROOTS_VERSION), using upstream dwl main branch${CRE}\n"
+    DWL_BRANCH="main"
+    DWL_REPO="https://codeberg.org/dwl/dwl.git"
     ;;
 esac
 
@@ -306,12 +348,15 @@ printf "${CB}Cloning and compiling programs...${CRE}\n"
   # Clone and compile source programs
   cd "$HOME/.local/src/" || { printf "${CR}Failed to enter .local/src${CRE}\n"; exit 1; }
   
-  # Clone dwl with appropriate branch for wlroots compatibility
+  # Clone dwl with appropriate repository and branch for wlroots compatibility
   if [ ! -d "dwl" ]; then
-    printf "${CB}Cloning dwl with branch ${CY}$DWL_BRANCH${CB}...${CRE}\n"
-    clone "https://codeberg.org/oceanicc/dwl.git" "dwl" "$DWL_BRANCH" || {
+    printf "${CB}Cloning dwl from ${CY}$DWL_REPO${CB} with branch ${CY}$DWL_BRANCH${CB}...${CRE}\n"
+    clone "$DWL_REPO" "dwl" "$DWL_BRANCH" || {
       printf "${CY}Specific branch failed, trying main branch...${CRE}\n"
-      clone "https://codeberg.org/oceanicc/dwl.git" "dwl"
+      clone "$DWL_REPO" "dwl" || {
+        printf "${CY}oceanicc/dwl failed, trying upstream dwl...${CRE}\n"
+        clone "https://codeberg.org/dwl/dwl.git" "dwl"
+      }
     }
   fi
   
