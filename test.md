@@ -236,8 +236,135 @@ sudo pacman -R seatd
    ```
 
 ---
+### Adding Labwc to Xfce Login Manager (LightDM) on Artix Linux
 
-This setup provides a complete minimal Wayland environment using Artix's s6 init. Customize further by exploring:
-- [Labwc Documentation](https://github.com/labwc/labwc/wiki)
-- [Yambar Modules](https://codeberg.org/dnkl/yambar/src/branch/master/doc/modules.md)
-- [Artix s6 Wiki](https://wiki.artixlinux.org/Main/S6)
+To add Labwc as a session option in the Xfce login manager (typically LightDM), follow these steps:
+
+#### 1. Create a Labwc Desktop Entry
+Create a new session file in `/usr/share/wayland-sessions/`:
+```bash
+sudo nano /usr/share/wayland-sessions/labwc.desktop
+```
+
+Add this content:
+```ini
+[Desktop Entry]
+Name=Labwc
+Comment=Lightweight Stacking Wayland Compositor
+Exec=dbus-run-session labwc
+Type=Application
+```
+
+#### 2. Create Session Environment File
+Create a wrapper script to set up the environment:
+```bash
+sudo nano /usr/local/bin/labwc-session
+```
+
+Add:
+```bash
+#!/bin/sh
+export XDG_CURRENT_DESKTOP=Labwc
+export XDG_SESSION_TYPE=wayland
+export MOZ_ENABLE_WAYLAND=1
+export QT_QPA_PLATFORM=wayland
+export GDK_BACKEND=wayland
+
+exec dbus-run-session labwc "$@"
+```
+
+Make executable:
+```bash
+sudo chmod +x /usr/local/bin/labwc-session
+```
+
+#### 3. Update Desktop Entry
+Modify your `.desktop` file to use the wrapper:
+```bash
+sudo nano /usr/share/wayland-sessions/labwc.desktop
+```
+
+Change the `Exec` line to:
+```ini
+Exec=/usr/local/bin/labwc-session
+```
+
+#### 4. Create Session Icon (Optional)
+For better visual identification:
+```bash
+sudo wget https://raw.githubusercontent.com/labwc/labwc/master/contrib/labwc.svg -O /usr/share/icons/labwc.svg
+```
+
+Then add to your desktop file:
+```ini
+Icon=labwc
+```
+
+#### 5. Update LightDM Configuration
+Edit the LightDM configuration:
+```bash
+sudo nano /etc/lightdm/lightdm.conf
+```
+
+Ensure these lines exist under `[Seat:*]`:
+```ini
+greeter-session=lightdm-greeter
+session-directory=/usr/share/wayland-sessions:/usr/share/xsessions
+```
+
+#### 6. Restart LightDM
+Apply changes:
+```bash
+sudo s6-rc -d change lightdm  # Stop
+sudo s6-rc -u change lightdm  # Start
+```
+
+### Verify the Setup
+1. At the login screen, click the session selector (usually a gear icon)
+2. You should see "Labwc" listed as an available session
+3. Select it and log in normally
+
+### Troubleshooting
+1. **If Labwc doesn't appear:**
+   - Check desktop file location:
+     ```bash
+     ls /usr/share/wayland-sessions/
+     ```
+   - Verify file permissions:
+     ```bash
+     sudo chmod 644 /usr/share/wayland-sessions/labwc.desktop
+     ```
+
+2. **If session fails to start:**
+   - Check logs:
+     ```bash
+     journalctl -u lightdm --since "5 minutes ago"
+     ```
+   - Test session manually from TTY:
+     ```bash
+     /usr/local/bin/labwc-session
+     ```
+
+3. **For GTK/Gnome users:** Install additional theming support
+   ```bash
+   sudo pacman -S xdg-desktop-portal xdg-desktop-portal-wlr
+   ```
+
+### Alternative: SDDM Display Manager
+If using SDDM instead of LightDM:
+1. Create the same `/usr/share/wayland-sessions/labwc.desktop` file
+2. Install SDDM Wayland support:
+   ```bash
+   sudo pacman -S sddm sddm-wayland
+   ```
+3. Enable SDDM:
+   ```bash
+   sudo s6-rc-bundle add sddm default
+   sudo s6-rc -u change sddm
+   ```
+
+### Final Notes
+- This setup ensures Labwc appears as a dedicated Wayland session
+- The wrapper script handles necessary environment variables
+- You can customize the session name/icon by modifying `labwc.desktop`
+- For additional polish, consider installing a login manager theme that supports Wayland sessions
