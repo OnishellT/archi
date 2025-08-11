@@ -1,132 +1,182 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+# Artix automated installer (runit, UEFI, GRUB, Arch repos + paru)
+# WARNING: THIS WILL WIPE THE TARGET DISK (see DISK variable)
 
-# Check if the script is run as root
-if [ "$EUID" -ne 0 ]; then
-    echo "Please run as root"
-    exit 1
+# --------- USER CONFIG (edit before running) -------------
+DISK="/dev/sda"              # TARGET DISK (will be wiped)
+EFI_SIZE_MIB=512             # EFI size in MiB
+SWAP_SIZE_GIB=2              # swap size in GiB (set 0 to create no swap partition)
+HOSTNAME="artixpc"
+USERNAME="onishell"
+PASSWORD="changeme"          # root and user password (plaintext here for automation). Consider changing interactively.
+TIMEZONE="America/Santo_Domingo"
+LOCALE="en_US.UTF-8"
+LANG="en_US.UTF-8"
+# --------------------------------------------------------
+
+# derived
+EFI_PART="${DISK}1"
+SWAP_PART="${DISK}2"
+ROOT_PART="${DISK}3"
+
+echoblue(){ printf "\n\033[1;34m==> %s\033[0m\n" "$1"; }
+echored(){ printf "\n\033[1;31m!! %s\033[0m\n" "$1"; }
+
+if [ "$(id -u)" -ne 0 ]; then
+  echored "Run this script as root (from Artix live CD). Exiting."
+  exit 1
 fi
 
-# Get the username from the first argument
-USER=$1
-
-# Check if the user exists
-if ! id "$USER" &>/dev/null; then
-    echo "User $USER does not exist"
-    exit 1
+read -r -p "WARNING: This will wipe ${DISK}. Type YES to continue: " CONF
+if [ "$CONF" != "YES" ]; then
+  echored "Aborted by user."
+  exit 1
 fi
 
-# Install necessary packages (including Pipewire and Bluetooth)
-pacman -S --needed hyprland waybar kitty sddm swaybg ttf-dejavu xwayland \
-    pipewire pipewire-pulse pipewire-alsa pipewire-jack wireplumber \
-    bluez bluez-utils blueman
+echoblue "1) Wiping disk and creating partitions on ${DISK}"
+parted --script "${DISK}" \
+  mklabel gpt \
+  mkpart ESP fat32 1MiB "${EFI_SIZE_MIB}MiB" \
+  set 1 boot on \
+  name 1 efi
 
-# Enable sddm and bluetooth services
-systemctl enable sddm
-systemctl enable bluetooth
+# Create swap if requested, then root
+if [ "${SWAP_SIZE_GIB}" -gt 0 ]; then
+  parted --script "${DISK}" \
+    mkpart primary linux-swap "${EFI_SIZE_MIB}MiB" "$((EFI_SIZE_MIB + SWAP_SIZE_GIB * 1024))MiB" \
+    name 2 swap
+  parted --script "${DISK}" \
+    mkpart primary ext4 "$((EFI_SIZE_MIB + SWAP_SIZE_GIB * 1024))MiB" 100% \
+    name 3 root
+else
+  parted --script "${DISK}" \
+    mkpart primary ext4 "${EFI_SIZE_MIB}MiB" 100% \
+    name 2 root
+  ROOT_PART="${DISK}2"
+  SWAP_PART=""
+fi
 
-# Create config directories
-mkdir -p /home/$USER/.config/hypr
-mkdir -p /home/$USER/.config/waybar
+sleep 1
 
-# Write Hyprland configuration
-cat << EOF > /home/$USER/.config/hypr/hyprland.conf
-# Hyprland configuration
-monitor=,preferred,auto,1
+echoblue "2) Formatting partitions"
+# EFI
+mkfs.fat -F32 "${EFI_PART}"
+# root
+mkfs.ext4 -F "${ROOT_PART}"
+# swap
+if [ -n "${SWAP_PART}" ]; then
+  mkswap "${SWAP_PART}"
+  swapon "${SWAP_PART}"
+fi
 
-input {
-    kb_layout = us
-}
+echoblue "3) Mounting partitions"
+mount "${ROOT_PART}" /mnt
+mkdir -p /mnt/boot
+mount "${EFI_PART}" /mnt/boot
 
-general {
-    gaps_in = 5
-    gaps_out = 10
-    border_size = 2
-    col.active_border = 0x66ee1111
-    col.inactive_border = 0x66333333
-}
+echoblue "4) Installing base system (basestrap)"
+# packages: base, base-devel, runit, kernel, firmware, grub, efibootmgr, dosfstools, networkmanager (and runit helper), dbus runit helper, sudo
+basestrap /mnt base base-devel runit linux linux-firmware grub efibootmgr dosfstools sudo networkmanager networkmanager-runit dbus-runit openssh vim
 
-decoration {
-    rounding = 5
-    drop_shadow = yes
-    shadow_range = 10
-    shadow_render_power = 3
-}
+echoblue "5) Generate fstab"
+fstabgen -U /mnt >> /mnt/etc/fstab
 
-animations {
-    enabled = yes
-    animation = windows, 1, 3, default
-    animation = fade, 1, 3, default
-}
+echoblue "6) Prepare Arch mirrorlist for /etc/pacman.d/mirrorlist-arch (Arch repos)"
+# fetch Arch mirrorlist into new system
+if command -v wget >/dev/null 2>&1; then
+  wget -q "https://archlinux.org/mirrorlist/all/" -O /mnt/etc/pacman.d/mirrorlist-arch || true
+else
+  echored "wget not found in live environment; skipping mirrorlist download. You can add /etc/pacman.d/mirrorlist-arch manually later."
+fi
 
-# Keybindings
-bind = SUPER, Return, exec, kitty
-bind = SUPER, Q, killactive
-bind = SUPER, left, movefocus, l
-bind = SUPER, right, movefocus, r
-bind = SUPER, up, movefocus, u
-bind = SUPER, down, movefocus, d
-bind = SUPER, 1, workspace, 1
-bind = SUPER, 2, workspace, 2
-bind = SUPER, 3, workspace, 3
-bind = SUPER, 4, workspace, 4
-bind = SUPER, 5, workspace, 5
-bind = SUPER, 6, workspace, 6
-bind = SUPER, 7, workspace, 7
-bind = SUPER, 8, workspace, 8
-bind = SUPER, 9, workspace, 9
-bind = SUPER, 0, workspace, 10
-bind = SUPER SHIFT, 1, movetoworkspace, 1
-bind = SUPER SHIFT, 2, movetoworkspace, 2
-bind = SUPER SHIFT, 3, movetoworkspace, 3
-bind = SUPER SHIFT, 4, movetoworkspace, 4
-bind = SUPER SHIFT, 5, movetoworkspace, 5
-bind = SUPER SHIFT, 6, movetoworkspace, 6
-bind = SUPER SHIFT, 7, movetoworkspace, 7
-bind = SUPER SHIFT, 8, movetoworkspace, 8
-bind = SUPER SHIFT, 9, movetoworkspace, 9
-bind = SUPER SHIFT, 0, movetoworkspace, 10
+echoblue "7) Add Arch repo blocks to new system pacman.conf (will append at end)"
+cat >> /mnt/etc/pacman.conf <<'EOF'
 
-# Execute on startup
-exec-once = swaybg -c #002b36
-exec-once = waybar
-exec-once = blueman-applet
+# === Arch repositories (added by install script) ===
+[extra]
+Include = /etc/pacman.d/mirrorlist-arch
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist-arch
 EOF
 
-# Write Waybar configuration (with pulseaudio and tray modules)
-cat << EOF > /home/$USER/.config/waybar/config
-{
-    "layer": "top",
-    "position": "top",
-    "height": 24,
-    "modules-left": ["hyprland/workspaces"],
-    "modules-center": [],
-    "modules-right": ["pulseaudio", "clock", "tray"],
-    "hyprland/workspaces": {
-        "format": "{name}"
-    },
-    "clock": {
-        "format": "{:%H:%M}"
-    },
-    "pulseaudio": {
-        "format": "{volume}% {icon}",
-        "format-icons": {
-            "default": ["", "", ""]
-        }
-    },
-    "tray": {
-        "spacing": 10
-    }
-}
-EOF
+echoblue "8) chrooting into new system to finish configuration (this may take a while)"
+CHROOT_CMD=""
 
-# Set ownership of config files
-chown -R $USER:$USER /home/$USER/.config/hypr
-chown -R $USER:$USER /home/$USER/.config/waybar
+if command -v artix-chroot >/dev/null 2>&1; then
+  CHROOT_CMD="artix-chroot /mnt /bin/bash -e -c"
+else
+  CHROOT_CMD="arch-chroot /mnt /bin/bash -e -c"
+fi
 
-# Enable Pipewire user services
-runuser -u $USER -- systemctl --user enable pipewire pipewire-pulse wireplumber
+${CHROOT_CMD} "set -euo pipefail
+# basic locale/time/hostname
+ln -sf /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
+hwclock --systohc
+echo '${LOCALE} UTF-8' > /etc/locale.gen
+locale-gen
+echo 'LANG=${LANG}' > /etc/locale.conf
+echo '${HOSTNAME}' > /etc/hostname
+cat > /etc/hosts <<HOSTS
+127.0.0.1   localhost
+::1         localhost
+127.0.1.1   ${HOSTNAME}.localdomain ${HOSTNAME}
+HOSTS
 
-# Completion message
-echo "Setup complete. Audio and Bluetooth have been configured with Pipewire and Blueman."
-echo "Please reboot the system to start using Hyprland with full audio and Bluetooth support."
-echo "For more information on using Hyprland, visit https://wiki.hyprland.org"
+# root password
+echo root:${PASSWORD} | chpasswd
+
+# create user
+useradd -m -G wheel -s /bin/bash '${USERNAME}'
+echo '${USERNAME}:${PASSWORD}' | chpasswd
+
+# allow wheel sudo
+sed -i 's/^# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers || true
+
+# ensure dbus+networkmanager runit scripts are present (we installed networkmanager/networkmanager-runit dbus-runit)
+# make sure runlevel default exists
+mkdir -p /etc/runit/runsvdir/default
+
+# enable dbus and NetworkManager for next boot (persistent runlevel)
+ln -sf /etc/runit/sv/dbus /etc/runit/runsvdir/default/dbus || true
+ln -sf /etc/runit/sv/NetworkManager /etc/runit/runsvdir/default/NetworkManager || true
+
+# try to start them now for configuring network now (the /run dir will exist at runtime)
+mkdir -p /run/runit/service
+ln -sf /etc/runit/sv/dbus /run/runit/service/dbus || true
+ln -sf /etc/runit/sv/NetworkManager /run/runit/service/NetworkManager || true
+
+# update package DB (with Arch repos available) and install some helpers
+pacman -Syy --noconfirm
+pacman -S --noconfirm --needed git base-devel
+
+# Install paru from AUR (build in /tmp as regular user)
+su - '${USERNAME}' -c 'cd /tmp && git clone https://aur.archlinux.org/paru.git || true && cd paru && makepkg -si --noconfirm || true'
+
+# Install GRUB for UEFI
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=Artix --recheck || true
+grub-mkconfig -o /boot/grub/grub.cfg || true
+
+# enable ssh if you want
+ln -sf /etc/runit/sv/sshd /etc/runit/runsvdir/default/sshd || true
+
+exit
+"
+
+echoblue "9) Cleanup, unmount and finish"
+# turn off swap if we created one
+if [ -n \"${SWAP_PART}\" ]; then
+  swapoff "${SWAP_PART}" || true
+fi
+
+umount -R /mnt || true
+
+echoblue "Installation finished. Reboot into your new Artix system:"
+echo "  1) remove the live media"
+echo "  2) reboot"
+echo
+echo "Notes:"
+echo " - Edit /etc/pacman.d/mirrorlist-arch inside the new system if you want different Arch mirrors."
+echo " - If you prefer a swap file instead of a swap partition, skip swap partition creation and create file later."
+echo
