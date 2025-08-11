@@ -4,12 +4,12 @@ set -euo pipefail
 # WARNING: THIS WILL WIPE THE TARGET DISK (see DISK variable)
 
 # --------- USER CONFIG (edit before running) -------------
-DISK="/dev/sda"              # TARGET DISK (will be wiped)
+DISK="/dev/nvme0n1"              # TARGET DISK (will be wiped)
 EFI_SIZE_MIB=512             # EFI size in MiB
-SWAP_SIZE_GIB=2              # swap size in GiB (set 0 to create no swap partition)
+SWAP_SIZE_GIB=4              # swap size in GiB (set 0 to create no swap partition)
 HOSTNAME="artixpc"
-USERNAME="onishell"
-PASSWORD="changeme"          # root and user password (plaintext here for automation). Consider changing interactively.
+USERNAME="dev"
+PASSWORD="toor"          # root and user password (plaintext here for automation). Consider changing interactively.
 TIMEZONE="America/Santo_Domingo"
 LOCALE="en_US.UTF-8"
 LANG="en_US.UTF-8"
