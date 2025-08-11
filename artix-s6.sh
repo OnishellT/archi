@@ -136,9 +136,9 @@ udevadm settle || true
 # Recompute derived partition variables (because partition numbering may change)
 # We'll create partitions now.
 if [ "${SWAP_SIZE_GIB}" -gt 0 ]; then
-  EFI_PART="${DISK}1"
-  SWAP_PART="${DISK}2"
-  ROOT_PART="${DISK}3"
+  EFI_PART="${DISK}p1"
+  SWAP_PART="${DISK}p2"
+  ROOT_PART="${DISK}p3"
 else
   EFI_PART="${DISK}1"
   SWAP_PART=""
